@@ -1,0 +1,28 @@
+# 梨园AI - 依赖列表
+# Web 框架
+fastapi>=0.104.0
+uvicorn>=0.24.0
+python-multipart>=0.0.6
+gradio>=4.0.0
+aiofiles>=23.2.0
+jinja2>=3.1.2
+
+# 视频处理
+opencv-python-headless>=4.8.0
+ffmpeg-python>=0.2.0
+
+# AI 模型
+torch>=2.0.0
+torchvision>=0.15.0
+transformers>=4.40.0
+sentence-transformers>=2.2.0
+open-clip-torch>=2.24.0
+
+# 向量数据库与检索
+faiss-cpu>=1.7.4
+chromadb>=0.4.0
+
+# 工具库
+numpy>=1.24.0
+Pillow>=10.0.0
+pydantic>=2.0.0

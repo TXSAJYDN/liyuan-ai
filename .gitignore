@@ -1,0 +1,58 @@
+# ===== Python 编译/缓存产物 =====
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 构建/发布产物
+build/
+dist/
+*.egg-info/
+
+# 测试/类型检查/格式化缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ===== 虚拟环境 =====
+.venv/
+venv/
+ENV/
+env/
+
+# ===== 环境变量/密钥（按需调整） =====
+.env
+.env.*
+!.env.example
+
+# ===== Jupyter =====
+.ipynb_checkpoints/
+
+# ===== IDE/编辑器 =====
+.vscode/
+.idea/
+*.iml
+
+# ===== 操作系统杂项 =====
+.DS_Store
+Thumbs.db
+
+# ===== 日志 =====
+*.log
+logs/
+
+# ===== 本项目：本地数据与生成物（不建议入库） =====
+# 上传视频、处理后片段、关键帧、缓存等
+/data/uploads/
+/data/processed/
+/data/keyframes/
+/data/cache/
+
+# 知识库向量索引（FAISS 等生成物）
+/knowledge_base/vector_store/
+
+# 其它常见本地缓存目录
+.cache/
