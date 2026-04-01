@@ -7,7 +7,7 @@ from pathlib import Path
 # ============ 路径配置 ============
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 
-# 原始戏曲数据目录（只读，绝不修改）
+# 原始戏曲数据目录
 OPERA_DATA_DIR = Path("/srv/nas_data/opera")
 
 # 千问多模态模型路径（配置好，按需加载）
@@ -67,6 +67,9 @@ RAG_RELEVANCE_THRESHOLD = 0.5
 # ============ 语义检索配置 ============
 CLIP_TOP_K = 10
 CLIP_SIMILARITY_THRESHOLD = 0.2
+
+# ============ 视频分析配置 ============
+MAX_ANALYSIS_FRAMES = 40  # 用于结构化分析的最大关键帧数量（均匀采样）
 
 # ============ 服务配置 ============
 API_HOST = "0.0.0.0"
