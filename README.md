@@ -85,7 +85,7 @@ curl -X POST http://localhost:8000/api/init/qwen_model
 
 | Setting            | Value                                                | Description                               |
 |--------------------|------------------------------------------------------|-------------------------------------------|
-| Opera data         | `/srv/nas_data/opera`                                | Read-only access; do not modify originals |
+| Opera data         | `/srv/nas_data/opera`(The server)                    | Read-only access                          |
 | Qwen model         | `/home/shq/data/models/Qwen3-omni-30B-A3B-Instruct`  | Load on demand                            |
 | Embedding model    | `paraphrase-multilingual-MiniLM-L12-v2`              | Knowledge base vectorization              |
 | CLIP model         | `ViT-B-16 (openai)`                                  | Semantic image retrieval                  |
