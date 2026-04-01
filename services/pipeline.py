@@ -13,7 +13,7 @@ from modules.knowledge_base import knowledge_base
 from modules.clip_retriever import clip_retriever
 from modules.qwen_model import qwen_model
 from services.rag_service import rag_service
-from configs.settings import UPLOAD_DIR, OPERA_DATA_DIR
+from configs.settings import UPLOAD_DIR, OPERA_DATA_DIR, MAX_ANALYSIS_FRAMES
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,13 @@ class Pipeline:
         if keyframe_paths is None:
             result = self.process_uploaded_video(video_path)
             keyframe_paths = [kf["path"] for kf in result["keyframes"]]
-        sample_frames = keyframe_paths[:20]
+        # 均匀采样关键帧，覆盖整个视频
+        if len(keyframe_paths) <= MAX_ANALYSIS_FRAMES:
+            sample_frames = keyframe_paths
+        else:
+            import numpy as np
+            indices = np.linspace(0, len(keyframe_paths) - 1, MAX_ANALYSIS_FRAMES, dtype=int)
+            sample_frames = [keyframe_paths[i] for i in indices]
         analysis_result = rag_service.analyze_video_with_rag(
             sample_frames,
             visual_keywords=["戏曲表演", "行当", "动作程式", "服饰"]
