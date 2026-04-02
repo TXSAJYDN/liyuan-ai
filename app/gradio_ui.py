@@ -69,13 +69,13 @@ def process_and_analyze_uploaded(video_file):
         result = pipeline.process_uploaded_video(video_path)
         keyframe_paths = [kf["path"] for kf in result["keyframes"]]
         analysis = pipeline.analyze_video(video_path, keyframe_paths=keyframe_paths)
-        thumbnails = keyframe_paths[:20]
+        thumbnails = analysis["sampled_frames"]
         info = (
             f"视频信息: {result['video_info']['width']}x{result['video_info']['height']}, "
             f"{result['video_info']['fps']:.1f}fps, "
             f"时长 {result['video_info']['duration']:.1f}s\n"
             f"切片数: {len(result['segments'])}\n"
-            f"关键帧数: {len(keyframe_paths)}\n"
+            f"关键帧数: {len(keyframe_paths)}（分析用: {len(thumbnails)}）\n"
             f"CLIP索引: {'已建立' if result.get('clip_index_ready') else '未建立'}"
         )
         return info, thumbnails, analysis["analysis"]
@@ -91,13 +91,13 @@ def process_and_analyze_opera(genre_key, video_name):
         result = pipeline.process_opera_video(genre_key, video_name)
         keyframe_paths = [kf["path"] for kf in result["keyframes"]]
         analysis = pipeline.analyze_video(result["video_path"], keyframe_paths=keyframe_paths)
-        thumbnails = keyframe_paths[:20]
+        thumbnails = analysis["sampled_frames"]
         info = (
             f"视频信息: {result['video_info']['width']}x{result['video_info']['height']}, "
             f"{result['video_info']['fps']:.1f}fps, "
             f"时长 {result['video_info']['duration']:.1f}s\n"
             f"切片数: {len(result['segments'])}\n"
-            f"关键帧数: {len(keyframe_paths)}\n"
+            f"关键帧数: {len(keyframe_paths)}（分析用: {len(thumbnails)}）\n"
             f"CLIP索引: {'已建立' if result.get('clip_index_ready') else '未建立'}"
         )
         return info, thumbnails, analysis["analysis"]
