@@ -38,10 +38,24 @@ class Pipeline:
             qwen_model.load_model()
 
     def process_uploaded_video(self, video_path: str) -> dict:
+        video_name = Path(video_path).stem
+        # 尝试加载缓存
+        result = video_processor.load_cached_result(video_path)
+        if result is not None:
+            # CLIP 索引也尝试从缓存加载
+            if not clip_retriever.is_ready:
+                clip_loaded = clip_retriever.load_index(video_name)
+            else:
+                clip_loaded = True
+            if not clip_loaded:
+                clip_retriever.build_index(result["keyframes"])
+                clip_retriever.save_index(video_name)
+            result["clip_index_ready"] = True
+            return result
+        # 无缓存，完整处理
         result = video_processor.process_video(video_path)
         if result["keyframes"]:
             clip_retriever.build_index(result["keyframes"])
-            video_name = Path(video_path).stem
             clip_retriever.save_index(video_name)
             result["clip_index_ready"] = True
         else:
@@ -79,7 +93,7 @@ class Pipeline:
         )
         return {
             "keyframe_count": len(keyframe_paths),
-            "sampled_frames": len(sample_frames),
+            "sampled_frames": sample_frames,
             "analysis": analysis_result["analysis"],
             "knowledge_refs": analysis_result["knowledge_refs"],
         }
