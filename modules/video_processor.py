@@ -125,6 +125,44 @@ class VideoProcessor:
         logger.info(f"从 {video_name} 抽取了 {len(keyframes)} 个关键帧")
         return keyframes
 
+    def load_cached_result(self, video_path: str) -> Optional[dict]:
+        """尝试从磁盘加载已有的处理结果，无缓存则返回 None"""
+        video_path = Path(video_path)
+        video_name = video_path.stem
+        seg_dir = self.processed_dir / video_name
+        segments = sorted(seg_dir.glob(f"{video_name}_seg_*.mp4")) if seg_dir.exists() else []
+        if not segments:
+            return None
+        all_keyframes = []
+        for seg in segments:
+            kf_dir = self.keyframe_dir / seg.stem
+            if not kf_dir.exists():
+                return None
+            imgs = sorted(kf_dir.glob("*.jpg"))
+            if not imgs:
+                return None
+            cap = cv2.VideoCapture(str(seg))
+            fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+            cap.release()
+            for img in imgs:
+                frame_idx = int(img.stem.rsplit("_", 1)[-1])
+                all_keyframes.append({
+                    "path": str(img),
+                    "timestamp": round(frame_idx / fps, 2),
+                    "frame_idx": frame_idx,
+                })
+        if not all_keyframes:
+            return None
+        video_info = self.get_video_info(str(video_path))
+        result = {
+            "video_path": str(video_path),
+            "video_info": video_info,
+            "segments": [str(s) for s in segments],
+            "keyframes": all_keyframes,
+        }
+        logger.info(f"命中缓存: {video_name}, {len(segments)} 片段, {len(all_keyframes)} 关键帧")
+        return result
+
     def process_video(self, video_path: str,
                       segment_duration: int = VIDEO_SEGMENT_DURATION,
                       keyframe_interval: float = KEYFRAME_INTERVAL,
