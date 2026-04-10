@@ -1,7 +1,7 @@
 """
 千问多模态模型调用模块
 - 封装 Qwen3-omni 模型的加载与推理接口
-- 仅配置，按需加载（调用 load_model() 时才真正加载模型到 GPU）
+- 按需加载（调用 load_model() 时才真正加载模型到 GPU）
 - 支持纯文本对话和多模态（图像+文本）输入
 """
 import logging
@@ -32,17 +32,17 @@ class QwenModel:
             logger.info("千问模型已加载，跳过")
             return
         import torch
-        from transformers import AutoProcessor, AutoModelForCausalLM
+        from transformers import AutoProcessor
+        from transformers import Qwen3OmniMoeForConditionalGeneration
         model_path = self.config["model_path"]
         logger.info(f"开始加载千问模型: {model_path}")
         self.processor = AutoProcessor.from_pretrained(
             model_path, trust_remote_code=True
         )
-        self.model = AutoModelForCausalLM.from_pretrained(
+        self.model = Qwen3OmniMoeForConditionalGeneration.from_pretrained(
             model_path,
             torch_dtype=getattr(torch, "bfloat16") if self.config["torch_dtype"] == "auto" else self.config["torch_dtype"],
             device_map=self.config["device"],
-            trust_remote_code=True
         )
         self.model.eval()
         self._loaded = True
@@ -52,7 +52,6 @@ class QwenModel:
         """纯文本对话"""
         if not self._loaded:
             raise RuntimeError("千问模型未加载，请先调用 load_model()")
-        import torch
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -61,14 +60,11 @@ class QwenModel:
             messages, tokenize=False, add_generation_prompt=True
         )
         inputs = self.processor(text=text, return_tensors="pt").to(self.model.device)
-        with torch.no_grad():
-            output_ids = self.model.generate(
-                **inputs,
-                max_new_tokens=self.config["max_new_tokens"],
-                temperature=self.config["temperature"],
-                top_p=self.config["top_p"],
-                do_sample=True,
-            )
+        output_ids = self.model.generate(
+            **inputs,
+            return_audio=False,
+            thinker_max_new_tokens=self.config["max_new_tokens"],
+        )
         generated_ids = output_ids[:, inputs["input_ids"].shape[-1]:]
         response = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
         return response.strip()
@@ -78,7 +74,6 @@ class QwenModel:
         """多模态对话（图像 + 文本）"""
         if not self._loaded:
             raise RuntimeError("千问模型未加载，请先调用 load_model()")
-        import torch
         from PIL import Image
         messages = []
         if system_prompt:
@@ -99,14 +94,11 @@ class QwenModel:
             text=text, images=images if images else None,
             return_tensors="pt"
         ).to(self.model.device)
-        with torch.no_grad():
-            output_ids = self.model.generate(
-                **inputs,
-                max_new_tokens=self.config["max_new_tokens"],
-                temperature=self.config["temperature"],
-                top_p=self.config["top_p"],
-                do_sample=True,
-            )
+        output_ids = self.model.generate(
+            **inputs,
+            return_audio=False,
+            thinker_max_new_tokens=self.config["max_new_tokens"],
+        )
         generated_ids = output_ids[:, inputs["input_ids"].shape[-1]:]
         response = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
         return response.strip()
