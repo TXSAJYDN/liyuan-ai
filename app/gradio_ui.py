@@ -61,6 +61,45 @@ def list_genre_videos(genre_key):
     return gr.update(choices=choices, value=choices[0] if choices else None)
 
 
+def format_analysis(raw_analysis: str) -> str:
+    """将模型输出的 JSON 分析结果格式化为连贯的文字描述"""
+    import json as _json
+    import re
+    # 尝试从 markdown 代码块中提取 JSON
+    m = re.search(r'```(?:json)?\s*(.+?)\s*```', raw_analysis, re.DOTALL)
+    if not m:
+        return raw_analysis
+    try:
+        data = _json.loads(m.group(1))
+    except _json.JSONDecodeError:
+        return raw_analysis
+    # 字段映射：JSON key -> 显示标签
+    field_labels = [
+        ("剧种剧目推测", "剧种与剧目"),
+        ("核心行当", "核心行当"),
+        ("关键动作程式", "关键动作程式"),
+        ("唱腔板式推测", "唱腔板式"),
+        ("唱腔 板式推测", "唱腔板式"),
+        ("情感表达", "情感表达"),
+        ("情感 表达", "情感表达"),
+        ("道具服饰细节", "道具与服饰"),
+        (" 道具服饰细节", "道具与服饰"),
+        ("综合描述", None),
+    ]
+    parts = []
+    for key, label in field_labels:
+        val = data.get(key)
+        if not val:
+            continue
+        if label is None:
+            parts.append(f"\n{val}")
+        else:
+            parts.append(f"【{label}】{val}")
+    if not parts:
+        return raw_analysis
+    return "\n".join(parts)
+
+
 def process_and_analyze_uploaded(video_file):
     if video_file is None:
         return "请先上传视频文件", [], ""
@@ -78,7 +117,7 @@ def process_and_analyze_uploaded(video_file):
             f"关键帧数: {len(keyframe_paths)}（分析用: {len(thumbnails)}）\n"
             f"CLIP索引: {'已建立' if result.get('clip_index_ready') else '未建立'}"
         )
-        return info, thumbnails, analysis["analysis"]
+        return info, thumbnails, format_analysis(analysis["analysis"])
     except Exception as e:
         logger.error(f"视频处理失败: {e}", exc_info=True)
         return f"处理失败: {e}", [], ""
@@ -100,7 +139,7 @@ def process_and_analyze_opera(genre_key, video_name):
             f"关键帧数: {len(keyframe_paths)}（分析用: {len(thumbnails)}）\n"
             f"CLIP索引: {'已建立' if result.get('clip_index_ready') else '未建立'}"
         )
-        return info, thumbnails, analysis["analysis"]
+        return info, thumbnails, format_analysis(analysis["analysis"])
     except Exception as e:
         logger.error(f"视频处理失败: {e}", exc_info=True)
         return f"处理失败: {e}", [], ""
@@ -132,11 +171,10 @@ def do_qa(question):
     try:
         result = pipeline.ask_question(question)
         answer = result["answer"]
-        source_tag = "知识增强回答" if result["source"] == "rag" else "通用生成回答"
         note = result.get("note", "")
-        output = f"**{source_tag}**\n\n{answer}"
+        output = answer
         if note:
-            output += f"\n\n---\n{note}"
+            output += f"\n\n{note}"
         if result.get("references"):
             output += "\n\n---\n**参考来源：**\n"
             for i, ref in enumerate(result["references"]):
