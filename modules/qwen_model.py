@@ -41,8 +41,9 @@ class QwenModel:
         )
         self.model = Qwen3OmniMoeForConditionalGeneration.from_pretrained(
             model_path,
-            torch_dtype=getattr(torch, "bfloat16") if self.config["torch_dtype"] == "auto" else self.config["torch_dtype"],
+            dtype=torch.bfloat16 if self.config["torch_dtype"] == "auto" else self.config["torch_dtype"],
             device_map=self.config["device"],
+            attn_implementation="sdpa",
         )
         self.model.eval()
         self._loaded = True
