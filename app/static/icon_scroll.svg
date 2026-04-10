@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" width="200" height="220">
+  <!-- Scroll body -->
+  <rect x="45" y="35" width="110" height="145" rx="3" fill="#fdf6f0" stroke="#8b6914" stroke-width="1.5"/>
+  <!-- Top roller -->
+  <rect x="38" y="28" width="124" height="12" rx="6" fill="#8b6914" stroke="#5a4510" stroke-width="1.5"/>
+  <circle cx="38" cy="34" r="6" fill="#a07828" stroke="#5a4510" stroke-width="1.5"/>
+  <circle cx="162" cy="34" r="6" fill="#a07828" stroke="#5a4510" stroke-width="1.5"/>
+  <!-- Bottom roller -->
+  <rect x="38" y="175" width="124" height="12" rx="6" fill="#8b6914" stroke="#5a4510" stroke-width="1.5"/>
+  <circle cx="38" cy="181" r="6" fill="#a07828" stroke="#5a4510" stroke-width="1.5"/>
+  <circle cx="162" cy="181" r="6" fill="#a07828" stroke="#5a4510" stroke-width="1.5"/>
+  <!-- Text lines on scroll -->
+  <g stroke="none" fill="#2a2a2a" opacity="0.5">
+    <rect x="62" y="55" width="76" height="2.5" rx="1"/>
+    <rect x="62" y="68" width="76" height="2.5" rx="1"/>
+    <rect x="62" y="81" width="60" height="2.5" rx="1"/>
+    <rect x="62" y="94" width="76" height="2.5" rx="1"/>
+    <rect x="62" y="107" width="70" height="2.5" rx="1"/>
+    <rect x="62" y="120" width="76" height="2.5" rx="1"/>
+    <rect x="62" y="133" width="50" height="2.5" rx="1"/>
+    <rect x="62" y="146" width="76" height="2.5" rx="1"/>
+    <rect x="62" y="159" width="40" height="2.5" rx="1"/>
+  </g>
+  <!-- Red seal stamp -->
+  <rect x="112" y="140" width="24" height="24" rx="2" fill="none" stroke="#c41e3a" stroke-width="2"/>
+  <text x="124" y="157" text-anchor="middle" font-family="serif" font-size="12" fill="#c41e3a" font-weight="bold">戏</text>
+  <!-- Caption -->
+  <text x="100" y="212" text-anchor="middle" font-family="serif" font-size="14" fill="#8b1a1a">戏曲知识问答</text>
+</svg>

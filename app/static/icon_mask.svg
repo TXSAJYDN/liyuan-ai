@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" width="200" height="220">
+  <!-- Face shape -->
+  <path d="M100,18 C145,18 172,50 172,95 C172,140 148,180 100,192 C52,180 28,140 28,95 C28,50 55,18 100,18Z" fill="#fff5e6" stroke="#2a2a2a" stroke-width="2.5"/>
+  <!-- Forehead - red area -->
+  <path d="M100,18 C145,18 172,50 172,72 Q136,58 100,62 Q64,58 28,72 C28,50 55,18 100,18Z" fill="#c41e3a"/>
+  <!-- Forehead center mark -->
+  <path d="M100,22 L112,48 L100,60 L88,48Z" fill="#ffd700" stroke="#b8860b" stroke-width="1"/>
+  <!-- Left eye area -->
+  <path d="M48,78 Q68,65 88,80 Q68,88 48,78Z" fill="white" stroke="#2a2a2a" stroke-width="2"/>
+  <circle cx="68" cy="80" r="6" fill="#2a2a2a"/>
+  <!-- Right eye area -->
+  <path d="M112,80 Q132,65 152,78 Q132,88 112,80Z" fill="white" stroke="#2a2a2a" stroke-width="2"/>
+  <circle cx="132" cy="80" r="6" fill="#2a2a2a"/>
+  <!-- Eye brow swoops -->
+  <path d="M42,72 Q68,55 92,72" fill="none" stroke="#c41e3a" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M108,72 Q132,55 158,72" fill="none" stroke="#c41e3a" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- Nose -->
+  <path d="M94,98 Q100,118 106,98" fill="none" stroke="#2a2a2a" stroke-width="2" stroke-linecap="round"/>
+  <!-- Mouth -->
+  <path d="M72,138 Q86,128 100,130 Q114,128 128,138" fill="none" stroke="#c41e3a" stroke-width="3" stroke-linecap="round"/>
+  <path d="M78,140 Q100,152 122,140" fill="#c41e3a" stroke="#8b0000" stroke-width="1.5"/>
+  <!-- Cheek patterns -->
+  <path d="M38,90 Q48,108 42,132" fill="none" stroke="#c41e3a" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M162,90 Q152,108 158,132" fill="none" stroke="#c41e3a" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Forehead side curves -->
+  <path d="M45,68 Q38,55 42,40" fill="none" stroke="#ffd700" stroke-width="2" stroke-linecap="round"/>
+  <path d="M155,68 Q162,55 158,40" fill="none" stroke="#ffd700" stroke-width="2" stroke-linecap="round"/>
+  <!-- Caption -->
+  <text x="100" y="212" text-anchor="middle" font-family="serif" font-size="14" fill="#8b1a1a">视频结构化分析</text>
+</svg>

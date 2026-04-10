@@ -66,11 +66,34 @@ button.primary {{
     background: linear-gradient(135deg, #c41e3a, #8b1a1a) !important;
     border: none !important;
 }}
+.icon-col {{
+    flex: 0 0 90px !important;
+    min-width: 90px !important;
+    max-width: 90px !important;
+}}
+.tab-header-row {{
+    justify-content: center !important;
+    max-width: 600px !important;
+    margin: 0 auto !important;
+}}
 """
 
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+# ---- 功能区配图 ----
+_STATIC_DIR = Path(__file__).parent / "static"
+def _svg_to_html(filename: str, width: int = 120) -> str:
+    svg_path = _STATIC_DIR / filename
+    if not svg_path.exists():
+        return ""
+    b64 = base64.b64encode(svg_path.read_bytes()).decode()
+    return f'<div style="display:flex;justify-content:center;align-items:center"><img src="data:image/svg+xml;base64,{b64}" width="{width}"/></div>'
+
+_ICON_MASK_HTML = _svg_to_html("icon_mask.svg", 80)
+_ICON_FAN_HTML = _svg_to_html("icon_fan.svg", 80)
+_ICON_SCROLL_HTML = _svg_to_html("icon_scroll.svg", 80)
 
 from configs.settings import (
     OPERA_DATA_DIR, OPERA_GENRES, GRADIO_PORT, CACHE_DIR,
@@ -357,7 +380,9 @@ def create_ui():
 
         with gr.Tabs():
             with gr.Tab("视频结构化分析"):
-                gr.Markdown("### 上传或选择戏曲视频，AI将自动分析并生成结构化总结")
+                with gr.Row(elem_classes=["tab-header-row"]):
+                    gr.HTML(_ICON_MASK_HTML, elem_classes=["icon-col"])
+                    gr.Markdown("### 上传或选择戏曲视频\nAI将自动分析并生成结构化总结")
                 with gr.Tabs():
                     with gr.Tab("上传视频"):
                         upload_video = gr.Video(label="上传戏曲视频")
@@ -384,8 +409,9 @@ def create_ui():
                     export_file = gr.File(label="下载报告", visible=False)
 
             with gr.Tab("按义寻画（语义检索）"):
-                gr.Markdown("### 用自然语言描述你想找的画面，AI帮你从视频中精准定位")
-                gr.Markdown('示例："主角甩水袖的瞬间"、"起霸动作"、"人物亮相"、"脸谱特写"')
+                with gr.Row(elem_classes=["tab-header-row"]):
+                    gr.HTML(_ICON_FAN_HTML, elem_classes=["icon-col"])
+                    gr.Markdown('### 用自然语言描述你想找的画面\nAI帮你从视频中精准定位。示例："甩水袖"、"起霸动作"、"人物亮相"、"脸谱特写"')
                 with gr.Row():
                     search_query = gr.Textbox(
                         label="输入描述", placeholder="描述你想找的戏曲画面...", scale=3
@@ -403,11 +429,9 @@ def create_ui():
                 search_gallery = gr.Gallery(label="匹配的关键帧", columns=5, height=400)
 
             with gr.Tab("戏曲知识问答"):
-                gr.Markdown("### 提出你的戏曲问题，AI基于专业知识库为你解答")
-                gr.Markdown(
-                    '示例："京剧中的西皮和二黄有什么区别？"、'
-                    '"什么是起霸？"、"梆子戏有哪些代表剧目？"'
-                )
+                with gr.Row(elem_classes=["tab-header-row"]):
+                    gr.HTML(_ICON_SCROLL_HTML, elem_classes=["icon-col"])
+                    gr.Markdown('### 提出你的戏曲问题，AI基于专业知识库为你解答\n示例："西皮和二黄有什么区别？"、"什么是起霸？"、"梆子戏有哪些代表剧目？"')
                 qa_input = gr.Textbox(
                     label="输入问题", placeholder="请输入你的戏曲相关问题...", lines=2
                 )

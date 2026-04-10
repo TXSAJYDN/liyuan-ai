@@ -8,7 +8,8 @@ A multimodal system for structured analysis of opera videos, semantic retrieval,
 liyuan-ai/
 ├── app/                    # Application layer
 │   ├── api.py             # FastAPI backend API
-│   └── gradio_ui.py       # Gradio frontend UI
+│   ├── gradio_ui.py       # Gradio frontend UI
+│   └── static/            # Static assets (UI icons, SVGs, etc.)
 ├── modules/               # AI core modules
 │   ├── video_processor.py # Video processing (FFmpeg slicing + OpenCV keyframe extraction)
 │   ├── knowledge_base.py  # Knowledge base (FAISS vector retrieval)
