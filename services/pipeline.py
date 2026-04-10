@@ -13,7 +13,7 @@ from modules.knowledge_base import knowledge_base
 from modules.clip_retriever import clip_retriever
 from modules.qwen_model import qwen_model
 from services.rag_service import rag_service
-from configs.settings import UPLOAD_DIR, OPERA_DATA_DIR, MAX_ANALYSIS_FRAMES
+from configs.settings import UPLOAD_DIR, OPERA_DATA_DIR, MAX_ANALYSIS_FRAMES, CACHE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -87,10 +87,35 @@ class Pipeline:
             import numpy as np
             indices = np.linspace(0, len(keyframe_paths) - 1, MAX_ANALYSIS_FRAMES, dtype=int)
             sample_frames = [keyframe_paths[i] for i in indices]
+        # 尝试加载缓存的分析结果
+        video_name = Path(video_path).stem
+        cache_key = f"{video_name}_{len(sample_frames)}"
+        cache_file = Path(CACHE_DIR) / "analysis" / f"{cache_key}.json"
+        if cache_file.exists():
+            import json
+            with open(cache_file, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+            logger.info(f"命中分析缓存: {cache_key}")
+            return {
+                "keyframe_count": len(keyframe_paths),
+                "sampled_frames": sample_frames,
+                "analysis": cached["analysis"],
+                "knowledge_refs": cached["knowledge_refs"],
+            }
         analysis_result = rag_service.analyze_video_with_rag(
             sample_frames,
             visual_keywords=["戏曲表演", "行当", "动作程式", "服饰"]
         )
+        # 保存分析缓存
+        if qwen_model.is_loaded:
+            import json
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump({
+                    "analysis": analysis_result["analysis"],
+                    "knowledge_refs": analysis_result["knowledge_refs"],
+                }, f, ensure_ascii=False, indent=2)
+            logger.info(f"分析结果已缓存: {cache_key}")
         return {
             "keyframe_count": len(keyframe_paths),
             "sampled_frames": sample_frames,
