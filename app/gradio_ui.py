@@ -243,7 +243,7 @@ def create_ui():
                     label="输入问题", placeholder="请输入你的戏曲相关问题...", lines=2
                 )
                 btn_qa = gr.Button("提问", variant="primary")
-                qa_output = gr.Markdown(label="回答")
+                qa_output = gr.Textbox(label="回答", lines=12, interactive=False)
                 btn_qa.click(fn=do_qa, inputs=[qa_input], outputs=[qa_output])
 
         gr.Markdown(
