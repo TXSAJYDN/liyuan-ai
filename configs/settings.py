@@ -69,7 +69,7 @@ CLIP_TOP_K = 10
 CLIP_SIMILARITY_THRESHOLD = 0.2
 
 # ============ 视频分析配置 ============
-MAX_ANALYSIS_FRAMES = 80  # 用于结构化分析的最大关键帧数量（均匀采样）
+MAX_ANALYSIS_FRAMES = 100  # 用于结构化分析的最大关键帧数量（均匀采样）
 
 # ============ 服务配置 ============
 API_HOST = "0.0.0.0"
