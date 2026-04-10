@@ -70,6 +70,35 @@ class QwenModel:
         response = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
         return response.strip()
 
+    def chat_stream(self, prompt: str, system_prompt: Optional[str] = None):
+        """纯文本对话（流式输出）"""
+        if not self._loaded:
+            raise RuntimeError("千问模型未加载，请先调用 load_model()")
+        from transformers import TextIteratorStreamer
+        import threading
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        text = self.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        inputs = self.processor(text=text, return_tensors="pt").to(self.model.device)
+        streamer = TextIteratorStreamer(
+            self.processor.tokenizer, skip_prompt=True, skip_special_tokens=True
+        )
+        gen_kwargs = dict(inputs)
+        gen_kwargs.update({
+            "return_audio": False,
+            "thinker_max_new_tokens": self.config["max_new_tokens"],
+            "streamer": streamer,
+        })
+        thread = threading.Thread(target=self.model.generate, kwargs=gen_kwargs)
+        thread.start()
+        for new_text in streamer:
+            yield new_text
+        thread.join()
+
     def chat_with_images(self, prompt: str, image_paths: List[str],
                          system_prompt: Optional[str] = None) -> str:
         """多模态对话（图像 + 文本）"""
@@ -158,8 +187,7 @@ class QwenModel:
         """解释关键帧为何匹配用户查询"""
         system_prompt = "你是一位戏曲表演艺术专家。"
         prompt = (
-            f"请描述这张图片中的戏曲动作和场景，"
-            f"并解释它为什么与用户的描述「{user_query}」相关。"
+            f"请用一两句话简要说明这张图片与用户描述「{user_query}」的关联。"
         )
         return self.chat_with_images(prompt, [image_path], system_prompt)
 
