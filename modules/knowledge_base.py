@@ -59,7 +59,7 @@ class KnowledgeBase:
         return chunks
 
     def collect_knowledge_from_opera_data(self) -> List[dict]:
-        """从原始戏曲数据目录收集知识文本"""
+        """从原始戏曲数据目录收集知识文本（只读访问）"""
         all_docs = []
         for genre_dir in OPERA_DATA_DIR.iterdir():
             if not genre_dir.is_dir():

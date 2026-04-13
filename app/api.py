@@ -33,7 +33,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
+APP_DIR = Path(__file__).parent.resolve()
 app.mount("/keyframes", StaticFiles(directory=str(KEYFRAME_DIR)), name="keyframes")
+app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
+
+from app.web import router as web_router
+app.include_router(web_router)
 
 
 class SearchRequest(BaseModel):
@@ -49,10 +54,6 @@ class AnalyzeOperaRequest(BaseModel):
     genre: str
     video_name: str
 
-
-@app.get("/")
-async def root():
-    return {"message": "梨园AI 后端服务运行中", "status": "ok"}
 
 @app.get("/api/status")
 async def get_status():

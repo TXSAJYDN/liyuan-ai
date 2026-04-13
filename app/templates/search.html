@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% block title %}按义寻画{% endblock %}
+{% block nav_search %}active{% endblock %}
+
+{% block head %}
+<style>
+.search-hero {
+  padding: 48px 0 32px;
+  text-align: center;
+}
+
+.search-bar {
+  max-width: 720px;
+  margin: 32px auto 0;
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.search-input-wrap {
+  flex: 1;
+  position: relative;
+}
+
+.search-input-wrap .form-input {
+  padding-left: 44px;
+  padding-right: 16px;
+  height: 52px;
+  font-size: 1rem;
+  border-radius: var(--radius-md);
+}
+
+.search-input-wrap .search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.search-bar .form-select {
+  width: 180px;
+  height: 52px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.search-bar .btn {
+  height: 52px;
+  padding: 0 28px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+/* Examples */
+.search-examples {
+  max-width: 720px;
+  margin: 16px auto 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.example-tag {
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  background: rgba(196,30,58,0.04);
+  border: 1px solid rgba(196,30,58,0.1);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font-sans);
+}
+
+.example-tag:hover {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+  background: rgba(196,163,90,0.1);
+}
+
+/* Results */
+.search-results-section {
+  margin-top: 48px;
+}
+
+.results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.results-count {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+/* Result grid */
+.search-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.search-result-item {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  transition: all var(--transition);
+  cursor: pointer;
+  background: var(--bg-secondary);
+}
+
+.search-result-item:hover {
+  border-color: var(--accent-red);
+  box-shadow: 0 4px 24px rgba(196,30,58,0.1);
+  transform: translateY(-3px);
+}
+
+.search-result-item.top-match {
+  border-color: rgba(196,30,58,0.3);
+  box-shadow: 0 0 24px rgba(196,30,58,0.08);
+}
+
+.search-result-item.top-match::before {
+  content: "最佳匹配";
+  position: absolute;
+  top: 10px; left: 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--accent-red);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  z-index: 3;
+}
+
+.result-img-wrap {
+  aspect-ratio: 16/10;
+  overflow: hidden;
+}
+
+.result-img-wrap img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.4s ease;
+}
+
+.search-result-item:hover .result-img-wrap img {
+  transform: scale(1.05);
+}
+
+.result-info {
+  padding: 14px 16px;
+}
+
+.result-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+  margin-bottom: 8px;
+}
+
+.result-timestamp {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.result-score {
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+.result-explanation {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Empty state */
+.search-empty {
+  text-align: center;
+  padding: 80px 0;
+  color: var(--text-muted);
+}
+
+.search-empty svg { opacity: 0.25; margin-bottom: 16px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="search-hero">
+    <h1>按义<span class="text-gold">寻画</span></h1>
+    <p class="text-muted">用自然语言描述你想找的戏曲画面，AI 从视频关键帧中精准定位</p>
+
+    <div class="search-bar">
+      <div class="search-input-wrap">
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" class="form-input" id="searchInput" placeholder="描述你想找的戏曲画面..." autocomplete="off">
+      </div>
+      <select class="form-select" id="searchVideoSelect">
+        <option value="">全部视频</option>
+      </select>
+      <button class="btn btn-primary" id="btnSearch">搜索</button>
+    </div>
+
+    <div class="search-examples">
+      <span class="example-tag" data-q="甩水袖">甩水袖</span>
+      <span class="example-tag" data-q="人物亮相">人物亮相</span>
+      <span class="example-tag" data-q="起霸动作">起霸动作</span>
+      <span class="example-tag" data-q="脸谱特写">脸谱特写</span>
+      <span class="example-tag" data-q="武打场面">武打场面</span>
+      <span class="example-tag" data-q="舞台全景">舞台全景</span>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="search-results-section hidden" id="resultsSection">
+    <div class="results-header">
+      <h3><span class="text-gold">&#9670;</span> 检索结果</h3>
+      <span class="results-count" id="resultsCount"></span>
+    </div>
+    <div class="search-grid" id="searchGrid"></div>
+  </div>
+
+  <div class="search-empty" id="searchEmpty">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+    <p>输入描述并搜索，匹配的戏曲画面将展示在此处</p>
+    <p style="font-size:0.82rem;">需先在「视频分析」页处理视频以建立 CLIP 索引</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const searchInput = document.getElementById('searchInput');
+  const videoSelect = document.getElementById('searchVideoSelect');
+  const btnSearch = document.getElementById('btnSearch');
+  const searchGrid = document.getElementById('searchGrid');
+  const resultsSection = document.getElementById('resultsSection');
+  const resultsCount = document.getElementById('resultsCount');
+  const searchEmpty = document.getElementById('searchEmpty');
+
+  /* Load indexed videos into dropdown */
+  fetch('/api/status').then(r => r.json()).then(status => {
+    /* We don't have a dedicated endpoint for indexed video list,
+       but we can try loading from the clip indices cache */
+  });
+
+  /* Example tags */
+  document.querySelectorAll('.example-tag').forEach(tag => {
+    tag.addEventListener('click', () => {
+      searchInput.value = tag.dataset.q;
+      doSearch();
+    });
+  });
+
+  /* Enter key */
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') doSearch();
+  });
+
+  btnSearch.addEventListener('click', doSearch);
+
+  async function doSearch() {
+    const query = searchInput.value.trim();
+    if (!query) return;
+    showLoading('正在语义检索...');
+    try {
+      const data = await API.search(query, videoSelect.value);
+      const results = data.results || [];
+      if (results.length === 0) {
+        searchEmpty.innerHTML = `
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <p>未找到匹配「${query}」的关键帧</p>
+          <p style="font-size:0.82rem;">请确认已处理视频并建立 CLIP 索引</p>
+        `;
+        searchEmpty.classList.remove('hidden');
+        resultsSection.classList.add('hidden');
+        return;
+      }
+
+      searchEmpty.classList.add('hidden');
+      resultsSection.classList.remove('hidden');
+      resultsCount.textContent = `共 ${results.length} 个匹配`;
+
+      searchGrid.innerHTML = '';
+      results.forEach((r, i) => {
+        const url = keyframeUrl(r.path);
+        const scorePercent = Math.round(r.score * 100);
+        const item = document.createElement('div');
+        item.className = 'search-result-item fade-up' + (i === 0 ? ' top-match' : '');
+        item.style.animationDelay = (i * 0.05) + 's';
+        item.innerHTML = `
+          <div class="result-img-wrap">
+            <img src="${url}" alt="match" loading="lazy">
+          </div>
+          <div class="result-info">
+            <div class="result-info-row">
+              <span class="result-timestamp">${formatTime(r.timestamp)}</span>
+              <span class="result-score">${scorePercent}%</span>
+            </div>
+            <div class="sim-bar"><div class="sim-bar-fill" style="width:${scorePercent}%"></div></div>
+            ${r.explanation ? `<div class="result-explanation">${r.explanation}</div>` : ''}
+          </div>
+        `;
+        item.addEventListener('click', () => openLightbox(url));
+        searchGrid.appendChild(item);
+      });
+    } catch (e) {
+      alert('检索失败: ' + e.message);
+    } finally {
+      hideLoading();
+    }
+  }
+})();
+</script>
+{% endblock %}

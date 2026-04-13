@@ -34,11 +34,13 @@ env/
 # ===== IDE/编辑器 =====
 .vscode/
 .idea/
+.windsurf/
 *.iml
 
 # ===== 操作系统杂项 =====
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # ===== 日志 =====
 *.log
@@ -51,8 +53,25 @@ logs/
 /data/keyframes/
 /data/cache/
 
-# 知识库向量索引（FAISS 等生成物）
+# 知识库（向量索引 + 原始文本，均为本地生成/外部导入）
 /knowledge_base/vector_store/
+/knowledge_base/raw_texts/
 
 # 其它常见本地缓存目录
 .cache/
+
+# ===== 大文件防护（防止误提交） =====
+# 模型权重
+*.pt
+*.pth
+*.bin
+*.onnx
+*.safetensors
+# 视频/音频
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.flv
+*.wav
+*.mp3

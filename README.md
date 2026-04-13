@@ -1,103 +1,112 @@
-# Liyuan AI — Intelligent Opera Analysis and Interaction Platform
+# 梨园AI - 智能戏曲分析与交互平台
 
-A multimodal system for structured analysis of opera videos, semantic retrieval, and expert Q&A.
+基于多模态大模型的戏曲视频结构化分析、语义检索与专业问答系统。
 
-## Project Structure
+## 项目架构
 
 ```
 liyuan-ai/
-├── app/                    # Application layer
-│   ├── api.py             # FastAPI backend API
-│   ├── gradio_ui.py       # Gradio frontend UI
-│   └── static/            # Static assets (UI icons, SVGs, etc.)
-├── modules/               # AI core modules
-│   ├── video_processor.py # Video processing (FFmpeg slicing + OpenCV keyframe extraction)
-│   ├── knowledge_base.py  # Knowledge base (FAISS vector retrieval)
-│   ├── clip_retriever.py  # CLIP semantic image retrieval
-│   └── qwen_model.py      # Qwen multimodal model wrapper
-├── services/              # Service layer
-│   ├── pipeline.py        # Core business pipeline
-│   └── rag_service.py     # RAG-enhanced Q&A service
-├── configs/               # Configuration
-│   └── settings.py        # Global settings
-├── knowledge_base/        # Knowledge base storage
-│   ├── vector_store/      # FAISS index
-│   └── raw_texts/         # Source knowledge texts
-├── data/                  # Local data
-│   ├── uploads/           # Uploaded videos
-│   ├── processed/         # Processed video segments
-│   ├── keyframes/         # Extracted keyframes
-│   └── cache/             # Cache (CLIP indices, etc.)
-├── run_api.py             # Start backend service
-├── run_ui.py              # Start frontend UI
-├── build_knowledge_base.py # Build knowledge base
-└── requirements.txt       # Dependencies
+├── app/                    # 应用层
+│   ├── api.py             # FastAPI 后端 JSON 接口
+│   ├── web.py             # Jinja2 页面路由
+│   ├── gradio_ui.py       # Gradio 前端界面
+│   ├── templates/         # HTML 页面模板
+│   │   ├── base.html      # 公共基础模板
+│   │   ├── index.html     # 首页
+│   │   ├── analyze.html   # 视频分析页
+│   │   ├── search.html    # 语义检索页
+│   │   └── qa.html        # 知识问答页
+│   └── static/            # 前端静态资源
+│       ├── css/main.css   # 全局样式
+│       ├── js/main.js     # 全局脚本
+│       └── *.svg          # 图标资源
+├── modules/               # AI 核心模块
+│   ├── video_processor.py # 视频处理（FFmpeg切片 + OpenCV抽帧）
+│   ├── knowledge_base.py  # 知识库（FAISS向量检索）
+│   ├── clip_retriever.py  # CLIP语义图像检索
+│   └── qwen_model.py      # 千问多模态模型封装
+├── services/              # 业务服务层
+│   ├── pipeline.py        # 核心业务流水线
+│   └── rag_service.py     # RAG增强问答服务
+├── configs/               # 配置
+│   └── settings.py        # 全局配置
+├── knowledge_base/        # 知识库存储
+│   ├── vector_store/      # FAISS 索引
+│   └── raw_texts/         # 原始知识文本
+├── data/                  # 本地数据
+│   ├── uploads/           # 上传的视频
+│   ├── processed/         # 处理后的视频片段
+│   ├── keyframes/         # 抽取的关键帧
+│   └── cache/             # 缓存（CLIP索引等）
+├── run_api.py             # 启动后端服务
+├── run_ui.py              # 启动前端界面
+├── build_knowledge_base.py # 构建知识库
+└── requirements.txt       # 依赖列表
 ```
 
-## Environment Setup
+## 环境配置
 
 ```bash
 conda activate liyuan
 pip install -r requirements.txt
 ```
 
-## Core Features
+## 三大核心功能
 
-### Feature 1: Structured Summary of Opera Videos
-Upload or select an opera video → automatic slicing and keyframe extraction → RAG retrieves domain knowledge → Qwen model generates structured analysis.
+### 功能一：戏曲视频结构化总结
+上传或选择戏曲视频 → 自动切片抽帧 → RAG检索专业知识 → 千问模型生成结构化分析
 
-### Feature 2: Search by Meaning (Semantic Retrieval)
-Input natural language description → CLIP encodes text → compute similarity with keyframe vectors → return the best-matching frames.
+### 功能二：按义寻画（语义检索）
+用户输入自然语言描述 → CLIP文本编码 → 与关键帧图像向量计算相似度 → 返回最匹配画面
 
-### Feature 3: Expert Opera Knowledge Q&A
-RAG retrieves from the knowledge base for professional answers; the Qwen model provides general fallback responses.
+### 功能三：专业戏曲知识问答
+RAG优先检索知识库生成专业答案，通用兜底调用千问通用能力回答
 
-## Usage
+## 使用方式
 
-### Step 1: Build the Knowledge Base
-
+### 第一步：构建知识库
 ```bash
 conda activate liyuan
-cd /path/to/liyuan-ai
+cd /home/shq/data/shq/4C/liyuan-ai
 python build_knowledge_base.py
 ```
 
-### Step 2: Start Services
+### 第二步：启动服务
 
-**Option A: Launch Gradio UI (recommended for demo)**
+**方式A：启动 Gradio 前端（推荐演示用）**
 ```bash
 python run_ui.py
-# Visit http://localhost:7860
+# 访问 http://localhost:7860
 ```
 
-**Option B: Launch FastAPI Backend**
+**方式B：启动 FastAPI 后端**
 ```bash
 python run_api.py
-# Visit http://localhost:8000/docs for API docs
+# 访问 http://localhost:8000/docs 查看API文档
 ```
 
-### Step 3: Load the Qwen Model On Demand
-In the Gradio UI, click "Load Qwen model", or call the API:
+### 第三步：按需加载千问模型
+在 Gradio 界面中点击"加载千问模型"按钮，或调用 API：
 ```bash
 curl -X POST http://localhost:8000/api/init/qwen_model
 ```
 
-## Key Configuration
+## 关键配置
 
-| Setting            | Value                                                | Description                               |
-|--------------------|------------------------------------------------------|-------------------------------------------|
-| Opera data         | `/srv/nas_data/opera`(The server)                    | Read-only access                          |
-| Qwen model         | `/home/shq/data/models/Qwen3-omni-30B-A3B-Instruct`  | Load on demand                            |
-| Embedding model    | `paraphrase-multilingual-MiniLM-L12-v2`              | Knowledge base vectorization              |
-| CLIP model         | `ViT-B-16 (openai)`                                  | Semantic image retrieval                  |
-| Vector database    | FAISS (IndexFlatIP)                                  | KB + CLIP indices                         |
+| 配置项 | 值 | 说明 |
+|--------|------|------|
+| 戏曲数据 | `/srv/nas_data/opera` | 只读访问，不修改原始数据 |
+| 千问模型 | `/home/shq/data/models/Qwen3-omni-30B-A3B-Instruct` | 按需加载 |
+| 嵌入模型 | `paraphrase-multilingual-MiniLM-L12-v2` | 知识库向量化 |
+| CLIP模型 | `ViT-B-16 (openai)` | 语义图像检索 |
+| 向量数据库 | FAISS (IndexFlatIP) | 知识库+CLIP索引 |
 
-## Tech Stack
+## 技术栈
 
-- Backend: FastAPI + Python
-- Frontend: Gradio
-- Video Processing: FFmpeg + OpenCV
-- Multimodal Model: Qwen3-Omni-30B
-- Semantic Retrieval: OpenCLIP (ViT-B-16)
-- Knowledge Base: FAISS + Sentence-Transformers
-- Q&A: RAG (Retrieval-Augmented Generation)
+- **后端**: FastAPI + Python
+- **前端**: Gradio
+- **视频处理**: FFmpeg + OpenCV
+- **多模态模型**: Qwen3-Omni-30B
+- **语义检索**: OpenCLIP (ViT-B-16)
+- **知识库**: FAISS + Sentence-Transformers
+- **问答**: RAG (检索增强生成)
