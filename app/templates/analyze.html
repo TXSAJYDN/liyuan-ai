@@ -105,6 +105,11 @@
 }
 
 /* Result panel */
+#resultPanel {
+  overflow-x: auto;
+  min-width: 0;
+}
+
 .result-empty {
   display: flex;
   flex-direction: column;
@@ -482,7 +487,7 @@
     const text = analysisCards.innerText;
     if (!text) return;
     const blob = new Blob([
-      '梨园AI - 戏曲视频结构化分析报告\n' + '='.repeat(40) + '\n\n',
+      '梨园知见 - 戏曲视频结构化分析报告\n' + '='.repeat(40) + '\n\n',
       videoInfoChips.innerText + '\n\n',
       text
     ], { type: 'text/plain;charset=utf-8' });

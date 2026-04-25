@@ -23,6 +23,7 @@ class Pipeline:
 
     def __init__(self):
         self._kb_initialized = False
+        self.load_qwen_model()
 
     def init_knowledge_base(self):
         if self._kb_initialized and knowledge_base.is_ready:

@@ -28,7 +28,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelna
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="梨园AI - 智能戏曲分析与交互平台",
+    title="梨园知见 - 融合视觉语义检索与知识增强生成的戏曲视频智能解析平台",
     description="基于多模态大模型的戏曲视频结构化分析、语义检索与专业问答",
     version="1.0.0"
 )
