@@ -113,16 +113,13 @@ h3 { font-size: 1.33rem; }
 }
 
 .nav-logo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   width: 36px; height: 36px;
   border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent-red), var(--accent-red-dark));
-  color: #fff;
-  font-size: 1.1rem;
-  font-weight: 700;
-  font-family: var(--font-serif);
+  object-fit: cover;
+  background: var(--paper-warm);
+  border: 1px solid rgba(198, 23, 59, 0.16);
+  box-shadow: 0 3px 10px rgba(198, 23, 59, 0.08);
 }
 
 .nav-title {
@@ -622,16 +619,12 @@ h3 { font-size: 1.33rem; }
 }
 
 .footer-logo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   width: 28px; height: 28px;
   border-radius: 6px;
-  background: linear-gradient(135deg, var(--accent-red), var(--accent-red-dark));
-  color: #fff;
-  font-size: 0.85rem;
-  font-weight: 700;
-  font-family: var(--font-serif);
+  object-fit: cover;
+  background: var(--paper-warm);
+  border: 1px solid rgba(198, 23, 59, 0.14);
 }
 
 .footer-tech { display: flex; flex-wrap: wrap; gap: 8px; }

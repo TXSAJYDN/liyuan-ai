@@ -26,6 +26,62 @@ const API = {
   initQwen: () => fetch('/api/init/qwen_model', { method: 'POST' }).then(r => r.json()),
 };
 
+/* ---------- Hero figure opening ---------- */
+document.addEventListener('DOMContentLoaded', () => {
+  const opening = document.querySelector('.hero-opening');
+  if (!opening) return;
+
+  const openingDelay = 1000;
+  const openingMusic = document.getElementById('openingMusic');
+  document.body.classList.add('hero-opening-active');
+
+  const playOpeningMusic = () => {
+    if (!openingMusic) return;
+    openingMusic.currentTime = 0;
+    openingMusic.volume = 0.42;
+    const playPromise = openingMusic.play();
+    if (playPromise) {
+      playPromise.catch(() => {
+        const resumeMusic = () => {
+          openingMusic.play().catch(() => {});
+        };
+        document.addEventListener('pointerdown', resumeMusic, { once: true });
+      });
+    }
+  };
+
+  opening.querySelectorAll('video').forEach(video => {
+    video.currentTime = 0;
+    video.playbackRate = 0.92;
+    const startPlayback = () => {
+      const playPromise = video.play();
+      if (playPromise) playPromise.catch(() => {});
+    };
+    window.setTimeout(() => {
+      if (video.readyState >= 2) {
+        startPlayback();
+      } else {
+        video.addEventListener('loadeddata', startPlayback, { once: true });
+      }
+    }, openingDelay);
+  });
+
+  window.setTimeout(playOpeningMusic, openingDelay);
+
+  window.setTimeout(() => {
+    opening.classList.add('is-done');
+    document.body.classList.add('hero-opening-return');
+  }, openingDelay + 3900);
+
+  window.setTimeout(() => {
+    opening.remove();
+  }, openingDelay + 4800);
+
+  window.setTimeout(() => {
+    document.body.classList.remove('hero-opening-active');
+  }, openingDelay + 7200);
+});
+
 /* ---------- Nav scroll effect ---------- */
 const nav = document.getElementById('mainNav');
 if (nav) {

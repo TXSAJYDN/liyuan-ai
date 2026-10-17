@@ -6,6 +6,7 @@
 <style>
 /* ---- Hero ---- */
 .hero {
+  --opening-paper: #e5ccac;
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -35,7 +36,182 @@
   position: absolute;
   bottom: 0; left: 0; right: 0;
   height: 200px;
-  background: linear-gradient(transparent, var(--bg-primary));
+  background: linear-gradient(transparent, rgba(229,204,172,0.18));
+}
+
+body.hero-opening-active .hero-bg::before {
+  background: linear-gradient(
+    180deg,
+    var(--bg-primary) 0%,
+    var(--bg-primary) 23%,
+    #f3e6d4 34%,
+    var(--opening-paper) 44%,
+    var(--opening-paper) 100%
+  );
+}
+
+body.hero-opening-active .hero-bg::after {
+  background: linear-gradient(transparent, var(--opening-paper));
+}
+
+.hero-reset-wipe {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-100%);
+  background:
+    linear-gradient(180deg, transparent calc(100% - 180px), rgba(248,243,235,0.55) calc(100% - 92px), rgba(248,243,235,0) 100%),
+    radial-gradient(ellipse at 30% 40%, rgba(196,30,58,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 60%, rgba(139,90,43,0.04) 0%, transparent 50%),
+    var(--bg-primary);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 calc(100% - 180px), rgba(0,0,0,0.72) calc(100% - 96px), transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 calc(100% - 180px), rgba(0,0,0,0.72) calc(100% - 96px), transparent 100%);
+}
+
+body.hero-opening-return .hero-reset-wipe {
+  animation: heroWhiteResetDrop 3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.hero-opening-wash {
+  display: none;
+}
+
+.hero-opening {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.hero-opening::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(248, 243, 235, 0) 0%,
+      rgba(243, 230, 212, 0.7) 30%,
+      var(--opening-paper) 42%,
+      var(--opening-paper) 100%
+    );
+}
+
+.hero-opening::after {
+  content: none;
+}
+
+.hero-opening.is-done {
+  animation: openingLayerExit 0.65s ease forwards;
+}
+
+.hero-figure {
+  position: absolute;
+  z-index: 2;
+  bottom: -8vh;
+  width: min(34vw, 430px);
+  height: min(82vh, 720px);
+  opacity: 0.88;
+  overflow: hidden;
+  filter: saturate(0.92) contrast(0.94) brightness(1.04);
+  mix-blend-mode: normal;
+  -webkit-mask-image:
+    linear-gradient(90deg, transparent 0%, #000 16%, #000 84%, transparent 100%),
+    linear-gradient(180deg, transparent 0%, #000 24%, #000 88%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(90deg, transparent 0%, #000 16%, #000 84%, transparent 100%),
+    linear-gradient(180deg, transparent 0%, #000 24%, #000 88%, transparent 100%);
+  mask-composite: intersect;
+}
+
+.hero-figure::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(229,204,172,0.34), rgba(229,204,172,0.34)),
+    radial-gradient(ellipse at 50% 58%, transparent 38%, rgba(229,204,172,0.48) 74%),
+    linear-gradient(180deg, rgba(229,204,172,0.2), transparent 34%, transparent 70%, rgba(229,204,172,0.72));
+  pointer-events: none;
+}
+
+.hero-figure--left {
+  left: max(-56px, -3vw);
+  transform: translateX(-18vw);
+  animation: figureLeftEnter 4.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.hero-figure--right {
+  right: max(-56px, -3vw);
+  transform: translateX(18vw);
+  animation: figureRightEnter 4.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.hero-figure video {
+  position: absolute;
+  left: 50%;
+  bottom: -8%;
+  width: 118%;
+  height: 118%;
+  object-fit: contain;
+  object-position: center bottom;
+  transform: translateX(-50%);
+}
+
+.hero-figure--left video {
+  transform: translateX(-50%) scaleX(-1);
+}
+
+.hero-content,
+.hero-scroll-hint {
+  z-index: 2;
+}
+
+body.hero-opening-active .nav {
+  animation: navSoftReveal 1.4s ease 0.7s both;
+}
+
+@keyframes figureLeftEnter {
+  0% { opacity: 0; transform: translateX(-24vw) scale(0.96); filter: blur(10px) saturate(0.7); }
+  42% { opacity: 0.78; }
+  100% { opacity: 0.9; transform: translateX(0) scale(1); filter: blur(0) saturate(0.96) contrast(0.96) brightness(1.03); }
+}
+
+@keyframes figureRightEnter {
+  0% { opacity: 0; transform: translateX(24vw) scale(0.96); filter: blur(10px) saturate(0.7); }
+  42% { opacity: 0.78; }
+  100% { opacity: 0.9; transform: translateX(0) scale(1); filter: blur(0) saturate(0.96) contrast(0.96) brightness(1.03); }
+}
+
+@keyframes openingWash {
+  0% { opacity: 0.88; transform: scaleX(1.08); }
+  65% { opacity: 0.36; }
+  100% { opacity: 0; transform: scaleX(1); }
+}
+
+@keyframes openingLayerExit {
+  to { opacity: 0; visibility: hidden; }
+}
+
+@keyframes heroWhiteResetDrop {
+  0% {
+    opacity: 1;
+    transform: translateY(-100%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes navSoftReveal {
+  from { opacity: 0; transform: translateY(-14px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Decorative opera silhouette lines */
@@ -211,6 +387,14 @@
   box-shadow: 0 0 16px rgba(196,30,58,0.1);
 }
 
+.qwen-pipeline-icon img {
+  width: 40px;
+  height: auto;
+  max-height: 26px;
+  object-fit: contain;
+  display: block;
+}
+
 .pipeline-label {
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -256,6 +440,14 @@
   display: block;
 }
 
+.culture-icon {
+  width: 68px;
+  height: 68px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto 12px;
+}
+
 .culture-name {
   font-family: var(--font-serif);
   font-size: 1.05rem;
@@ -268,10 +460,28 @@
 }
 
 @media (max-width: 900px) {
+  .hero-figure {
+    width: min(48vw, 300px);
+    height: 64vh;
+    bottom: -7vh;
+    opacity: 0.56;
+  }
+
+  .hero-figure--left { left: -22vw; }
+  .hero-figure--right { right: -22vw; }
+
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .pipeline-flow { flex-direction: column; }
   .pipeline-arrow { transform: rotate(90deg); }
   .culture-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-opening-wash,
+  .hero-figure,
+  body.hero-opening-active .nav {
+    animation: none;
+  }
 }
 </style>
 {% endblock %}
@@ -287,6 +497,17 @@
         fill="none" stroke="#8b5a2b" stroke-width="0.8" opacity="0.2"/>
     </svg>
   </div>
+  <div class="hero-opening" aria-hidden="true">
+    <div class="hero-opening-wash"></div>
+    <div class="hero-figure hero-figure--left">
+      <video src="/static/videos/huadan-opening.mp4" muted playsinline preload="auto"></video>
+    </div>
+    <div class="hero-figure hero-figure--right">
+      <video src="/static/videos/huadan-opening.mp4" muted playsinline preload="auto"></video>
+    </div>
+  </div>
+  <audio id="openingMusic" src="/static/audio/opening-music.mp3" preload="auto"></audio>
+  <div class="hero-reset-wipe" aria-hidden="true"></div>
   <div class="hero-content">
     <div class="hero-badge">
       <span>&#9670;</span> 基于多模态大模型的非遗数字化探索
@@ -425,8 +646,8 @@
       </div>
       <span class="pipeline-arrow">&#9654;</span>
       <div class="pipeline-step animate-on-scroll fade-up delay-4">
-        <div class="pipeline-icon" style="border-color: rgba(196,30,58,0.3);">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c41e3a" stroke-width="1.8"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <div class="pipeline-icon qwen-pipeline-icon" style="border-color: rgba(196,30,58,0.3);">
+          <img src="/static/images/qwen-logo.svg" alt="Qwen">
         </div>
         <span class="pipeline-label">Qwen3-Omni<br>多模态分析</span>
       </div>
@@ -451,42 +672,42 @@
     </div>
     <div class="culture-grid">
       <div class="culture-item animate-on-scroll fade-up">
-        <span class="culture-emoji">&#127917;</span>
+        <img class="culture-icon" src="/static/images/genre-icons/bangzi.png" alt="梆子图标">
         <div class="culture-name">梆子</div>
         <div class="culture-sub">Bangzi Opera</div>
       </div>
       <div class="culture-item animate-on-scroll fade-up delay-1">
-        <span class="culture-emoji">&#127926;</span>
+        <img class="culture-icon" src="/static/images/genre-icons/errentai.png" alt="二人台图标">
         <div class="culture-name">二人台</div>
         <div class="culture-sub">Errentai</div>
       </div>
       <div class="culture-item animate-on-scroll fade-up delay-1">
-        <span class="culture-emoji">&#127925;</span>
+        <img class="culture-icon" src="/static/images/genre-icons/gaoqiang.png" alt="高腔图标">
         <div class="culture-name">高腔</div>
         <div class="culture-sub">Gaoqiang</div>
       </div>
       <div class="culture-item animate-on-scroll fade-up delay-2">
-        <span class="culture-emoji">&#127931;</span>
+        <img class="culture-icon" src="/static/images/genre-icons/jiangnan-sizhu.png" alt="江南丝竹图标">
         <div class="culture-name">江南丝竹</div>
         <div class="culture-sub">Jiangnan Sizhu</div>
       </div>
       <div class="culture-item animate-on-scroll fade-up delay-2">
-        <span class="culture-emoji">&#127982;</span>
+        <img class="culture-icon" src="/static/images/genre-icons/lantern-opera.png" alt="花灯戏图标">
         <div class="culture-name">花灯戏</div>
         <div class="culture-sub">Lantern Opera</div>
       </div>
       <div class="culture-item animate-on-scroll fade-up delay-3">
-        <span class="culture-emoji">&#11088;</span>
+        <img class="culture-icon" src="/static/images/genre-icons/model-opera.png" alt="样板戏图标">
         <div class="culture-name">样板戏</div>
         <div class="culture-sub">Model Opera</div>
       </div>
       <div class="culture-item animate-on-scroll fade-up delay-3">
-        <span class="culture-emoji">&#127963;</span>
+        <img class="culture-icon" src="/static/images/genre-icons/regional-opera.png" alt="地方戏图标">
         <div class="culture-name">地方戏</div>
         <div class="culture-sub">Regional Opera</div>
       </div>
       <div class="culture-item animate-on-scroll fade-up delay-4">
-        <span class="culture-emoji">&#127914;</span>
+        <img class="culture-icon" src="/static/images/genre-icons/other-genres.png" alt="其他剧种图标">
         <div class="culture-name">其他剧种</div>
         <div class="culture-sub">Other Genres</div>
       </div>

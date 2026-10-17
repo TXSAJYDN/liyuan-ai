@@ -13,19 +13,19 @@ router = APIRouter()
 
 @router.get("/")
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @router.get("/analyze")
 async def analyze(request: Request):
-    return templates.TemplateResponse("analyze.html", {"request": request})
+    return templates.TemplateResponse(request, "analyze.html")
 
 
 @router.get("/search")
 async def search(request: Request):
-    return templates.TemplateResponse("search.html", {"request": request})
+    return templates.TemplateResponse(request, "search.html")
 
 
 @router.get("/qa")
 async def qa(request: Request):
-    return templates.TemplateResponse("qa.html", {"request": request})
+    return templates.TemplateResponse(request, "qa.html")
