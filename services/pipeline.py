@@ -38,29 +38,34 @@ class Pipeline:
         if not qwen_model.is_loaded:
             qwen_model.load_model()
 
+    def _ensure_clip_index(self, video_name: str, keyframes: List[dict],
+                           load_existing: bool = True) -> bool:
+        """确保当前请求使用的 CLIP 索引确实属于指定视频。"""
+        if load_existing and clip_retriever.load_index(video_name):
+            return clip_retriever.is_ready_for(video_name)
+        if not keyframes:
+            return False
+        if not clip_retriever.build_index(keyframes, video_name=video_name):
+            return False
+        if not clip_retriever.save_index(video_name):
+            logger.warning(f"CLIP 索引构建成功但保存失败: {video_name}")
+        return clip_retriever.is_ready_for(video_name)
+
     def process_uploaded_video(self, video_path: str) -> dict:
         video_name = Path(video_path).stem
         # 尝试加载缓存
         result = video_processor.load_cached_result(video_path)
         if result is not None:
-            # CLIP 索引也尝试从缓存加载
-            if not clip_retriever.is_ready:
-                clip_loaded = clip_retriever.load_index(video_name)
-            else:
-                clip_loaded = True
-            if not clip_loaded:
-                clip_retriever.build_index(result["keyframes"])
-                clip_retriever.save_index(video_name)
-            result["clip_index_ready"] = True
+            # 必须按视频名加载索引，不能把“任意索引已就绪”当成当前视频就绪。
+            result["clip_index_ready"] = self._ensure_clip_index(
+                video_name, result["keyframes"]
+            )
             return result
-        # 无缓存，完整处理
+        # 无缓存，完整处理；关键帧已重新生成，索引也必须重建。
         result = video_processor.process_video(video_path)
-        if result["keyframes"]:
-            clip_retriever.build_index(result["keyframes"])
-            clip_retriever.save_index(video_name)
-            result["clip_index_ready"] = True
-        else:
-            result["clip_index_ready"] = False
+        result["clip_index_ready"] = self._ensure_clip_index(
+            video_name, result["keyframes"], load_existing=False
+        )
         return result
 
     def process_opera_video(self, genre: str, video_name: str) -> dict:
@@ -125,11 +130,8 @@ class Pipeline:
         }
 
     def semantic_search(self, query_text: str, video_name: Optional[str] = None) -> List[dict]:
-        if video_name and not clip_retriever.is_ready:
-            clip_retriever.load_index(video_name)
-        if not clip_retriever.is_ready:
-            return []
-        results = clip_retriever.search(query_text)
+        # 指定视频时由检索器精确路由到对应索引；未指定时检索全部已索引视频。
+        results = clip_retriever.search(query_text, video_name=video_name)
         if results and qwen_model.is_loaded:
             top_result = results[0]
             explanation = qwen_model.explain_keyframe_match(
@@ -145,10 +147,17 @@ class Pipeline:
     def list_available_videos(self, genre: Optional[str] = None) -> List[dict]:
         return video_processor.list_opera_videos(genre)
 
+    def list_indexed_videos(self) -> List[str]:
+        return clip_retriever.list_indexed_videos()
+
     def get_status(self) -> dict:
+        indexed_videos = clip_retriever.list_indexed_videos()
         return {
             "knowledge_base_ready": knowledge_base.is_ready,
             "clip_index_ready": clip_retriever.is_ready,
+            "clip_index_available": bool(indexed_videos),
+            "clip_index_video": clip_retriever.current_video_name,
+            "clip_indexed_videos": indexed_videos,
             "qwen_model_loaded": qwen_model.is_loaded,
             "knowledge_base_docs": len(knowledge_base.documents) if knowledge_base.documents else 0,
             "clip_index_size": clip_retriever.index.ntotal if clip_retriever.index else 0,

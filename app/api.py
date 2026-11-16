@@ -71,6 +71,14 @@ async def list_videos(genre: Optional[str] = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/indexed_videos")
+async def list_indexed_videos():
+    try:
+        videos = pipeline.list_indexed_videos()
+        return {"videos": videos, "total": len(videos)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/upload")
 async def upload_video(file: UploadFile = File(...)):
     if not file.filename:

@@ -255,10 +255,17 @@
   const searchEmpty = document.getElementById('searchEmpty');
 
   /* Load indexed videos into dropdown */
-  fetch('/api/status').then(r => r.json()).then(status => {
-    /* We don't have a dedicated endpoint for indexed video list,
-       but we can try loading from the clip indices cache */
-  });
+  fetch('/api/indexed_videos')
+    .then(r => r.json())
+    .then(data => {
+      (data.videos || []).forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        videoSelect.appendChild(option);
+      });
+    })
+    .catch(err => console.warn('加载已索引视频失败:', err));
 
   /* Example tags */
   document.querySelectorAll('.example-tag').forEach(tag => {
