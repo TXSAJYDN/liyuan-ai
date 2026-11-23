@@ -15,13 +15,15 @@ from typing import Optional, List
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from configs.settings import UPLOAD_DIR, KEYFRAME_DIR, OPERA_GENRES
+from configs.settings import (
+    UPLOAD_DIR, KEYFRAME_DIR, OPERA_GENRES, RAG_RELEVANCE_THRESHOLD,
+)
 from services.pipeline import pipeline
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
@@ -44,11 +46,12 @@ app.include_router(web_router)
 class SearchRequest(BaseModel):
     query: str
     video_name: Optional[str] = None
-    top_k: int = 10
+    top_k: int = Field(default=10, ge=1, le=50)
 
 class QuestionRequest(BaseModel):
     question: str
-    top_k: int = 5
+    top_k: int = Field(default=5, ge=1, le=50)
+    threshold: Optional[float] = Field(default=None, ge=-1.0, le=1.0)
 
 class AnalyzeOperaRequest(BaseModel):
     genre: str
@@ -131,7 +134,9 @@ async def analyze_opera_video(request: AnalyzeOperaRequest):
 @app.post("/api/search")
 async def semantic_search(request: SearchRequest):
     try:
-        results = pipeline.semantic_search(request.query, video_name=request.video_name)
+        results = pipeline.semantic_search(
+            request.query, video_name=request.video_name, top_k=request.top_k
+        )
         return {"query": request.query, "results": results, "total": len(results)}
     except Exception as e:
         logger.error(f"语义检索失败: {e}")
@@ -140,7 +145,15 @@ async def semantic_search(request: SearchRequest):
 @app.post("/api/qa")
 async def question_answer(request: QuestionRequest):
     try:
-        result = pipeline.ask_question(request.question)
+        result = pipeline.ask_question(
+            request.question,
+            top_k=request.top_k,
+            threshold=(
+                request.threshold
+                if request.threshold is not None
+                else RAG_RELEVANCE_THRESHOLD
+            ),
+        )
         return result
     except Exception as e:
         logger.error(f"问答失败: {e}")

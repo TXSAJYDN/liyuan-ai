@@ -95,14 +95,11 @@ _ICON_MASK_HTML = _svg_to_html("icon_mask.svg", 80)
 _ICON_FAN_HTML = _svg_to_html("icon_fan.svg", 80)
 _ICON_SCROLL_HTML = _svg_to_html("icon_scroll.svg", 80)
 
-from configs.settings import (
-    OPERA_DATA_DIR, OPERA_GENRES, GRADIO_PORT, CACHE_DIR,
-    RAG_TOP_K, RAG_RELEVANCE_THRESHOLD,
-)
+from configs.settings import OPERA_DATA_DIR, OPERA_GENRES, GRADIO_PORT, CACHE_DIR
 from services.pipeline import pipeline
 from modules.video_processor import video_processor
-from modules.knowledge_base import knowledge_base
 from modules.qwen_model import qwen_model
+from services.rag_service import rag_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -282,52 +279,25 @@ def do_semantic_search(query, video_name):
 
 
 def do_qa_stream(question):
-    """流式问答：逐字输出 Qwen 回答"""
+    """流式问答：复用 RAGService 的检索、上下文和提示词。"""
     if not question:
         yield "请输入问题"
         return
     try:
-        pipeline.init_knowledge_base()
-        search_results = knowledge_base.search(
-            question, top_k=RAG_TOP_K, threshold=RAG_RELEVANCE_THRESHOLD
-        )
+        prepared = rag_service.prepare_answer(question)
         if not qwen_model.is_loaded:
-            result = pipeline.ask_question(question)
-            yield result["answer"]
+            yield prepared["fallback_answer"]
             return
-        system_prompt = (
-            "你是一位精通中国戏曲的专家，拥有丰富的戏曲知识。"
-            "请根据提供的参考资料（如有）回答用户关于戏曲的问题。"
-            "回答要准确、专业、通俗易懂。"
-        )
-        if search_results:
-            knowledge_context = "\n\n".join([
-                f"[来源: {r.get('title', '未知')} ({r.get('genre', '')})] {r['text']}"
-                for r in search_results
-            ])
-            prompt = (
-                f"参考资料：\n{knowledge_context}\n\n"
-                f"用户问题：{question}\n\n"
-                "请结合以上参考资料和你的专业知识，直接回答用户的问题。"
-                "回答应融会贯通，无需区分内容来源。"
-            )
-        else:
-            prompt = (
-                f"用户问题：{question}\n\n"
-                "请根据你的戏曲专业知识回答。"
-            )
+
         accumulated = ""
-        for token in qwen_model.chat_stream(prompt, system_prompt):
+        for token in qwen_model.chat_stream(
+            prepared["prompt"], prepared["system_prompt"]
+        ):
             accumulated += token
             yield strip_markdown(accumulated)
-        if search_results:
-            refs = "\n\n---\n参考来源：\n"
-            for i, ref in enumerate(search_results):
-                refs += (
-                    f"  {i+1}. [{ref.get('title', '未知')}] "
-                    f"({ref.get('genre', '')}) "
-                    f"相关度: {ref['score']:.4f}\n"
-                )
+
+        refs = rag_service.format_references_text(prepared["references"])
+        if refs:
             yield strip_markdown(accumulated) + refs
     except Exception as e:
         logger.error(f"问答失败: {e}", exc_info=True)

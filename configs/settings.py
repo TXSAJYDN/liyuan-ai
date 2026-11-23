@@ -58,11 +58,24 @@ QWEN_CONFIG = {
 }
 
 # ============ RAG 配置 ============
+# 多语言嵌入模型：中文问题可以检索英文戏曲资料。
 EMBEDDING_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-CHUNK_SIZE = 512
-CHUNK_OVERLAP = 64
+
+# 分块按自然边界递归切分，1200 字符约等于 300 token。
+CHUNK_SIZE = 1200
+CHUNK_OVERLAP = 180
+
 RAG_TOP_K = 5
-RAG_RELEVANCE_THRESHOLD = 0.5
+# 该阈值只约束 dense（向量）候选；BM25 精确词命中不受它误杀。
+RAG_RELEVANCE_THRESHOLD = 0.4
+RAG_DENSE_CANDIDATE_K = 20
+RAG_BM25_CANDIDATE_K = 20
+RAG_HYBRID_DENSE_WEIGHT = 0.65
+RAG_HYBRID_BM25_WEIGHT = 0.35
+# 送入 Qwen 的参考资料总字符预算，避免长上下文溢出。
+RAG_MAX_CONTEXT_CHARS = 4500
+# 近似重复块的 Jaccard 阈值。
+RAG_DEDUP_THRESHOLD = 0.82
 
 # ============ 语义检索配置 ============
 CLIP_TOP_K = 10

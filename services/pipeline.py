@@ -13,7 +13,10 @@ from modules.knowledge_base import knowledge_base
 from modules.clip_retriever import clip_retriever
 from modules.qwen_model import qwen_model
 from services.rag_service import rag_service
-from configs.settings import UPLOAD_DIR, OPERA_DATA_DIR, MAX_ANALYSIS_FRAMES, CACHE_DIR
+from configs.settings import (
+    UPLOAD_DIR, OPERA_DATA_DIR, MAX_ANALYSIS_FRAMES, CACHE_DIR,
+    CLIP_TOP_K, RAG_TOP_K, RAG_RELEVANCE_THRESHOLD,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -129,9 +132,12 @@ class Pipeline:
             "knowledge_refs": analysis_result["knowledge_refs"],
         }
 
-    def semantic_search(self, query_text: str, video_name: Optional[str] = None) -> List[dict]:
+    def semantic_search(self, query_text: str, video_name: Optional[str] = None,
+                        top_k: int = CLIP_TOP_K) -> List[dict]:
         # 指定视频时由检索器精确路由到对应索引；未指定时检索全部已索引视频。
-        results = clip_retriever.search(query_text, video_name=video_name)
+        results = clip_retriever.search(
+            query_text, top_k=top_k, video_name=video_name
+        )
         if results and qwen_model.is_loaded:
             top_result = results[0]
             explanation = qwen_model.explain_keyframe_match(
@@ -140,9 +146,12 @@ class Pipeline:
             results[0]["explanation"] = explanation
         return results
 
-    def ask_question(self, question: str) -> dict:
+    def ask_question(self, question: str, top_k: int = RAG_TOP_K,
+                     threshold: float = RAG_RELEVANCE_THRESHOLD) -> dict:
         self.init_knowledge_base()
-        return rag_service.answer_question(question)
+        return rag_service.answer_question(
+            question, top_k=top_k, threshold=threshold
+        )
 
     def list_available_videos(self, genre: Optional[str] = None) -> List[dict]:
         return video_processor.list_opera_videos(genre)
