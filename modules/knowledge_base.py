@@ -3,7 +3,7 @@
 - 从原始数据目录读取 txt 文件作为知识来源
 - 按自然边界递归分块、向量化、存入 FAISS 索引
 - 同时维护 BM25 词法索引，提供 dense + BM25 混合检索
-- 校验索引文件与文档/嵌入模型是否一致，避免加载脏索引
+- 校验索引文件与文档是否一致；嵌入模型延迟加载，不可用时自动降级 BM25
 """
 import json
 import logging
@@ -116,6 +116,10 @@ class KnowledgeBase:
         self._manifest_path = VECTOR_DB_DIR / "index_manifest.json"
         self._embedding_dim: Optional[int] = None
         self._lock = threading.RLock()
+        self._embedding_load_attempted = False
+        self._embedding_load_error: Optional[str] = None
+        self._dense_disabled_reason: Optional[str] = None
+        self._index_embedding_model: Optional[str] = None
 
         # BM25 运行时状态，加载/构建索引时由 documents 重建。
         self._bm25_tf: List[Counter] = []
@@ -123,14 +127,74 @@ class KnowledgeBase:
         self._bm25_idf: Dict[str, float] = {}
         self._bm25_avgdl = 0.0
 
-    def _load_embedding_model(self):
+    def _load_embedding_model(self, force_retry: bool = False) -> bool:
+        """延迟加载嵌入模型；失败只尝试一次，避免每个请求都等待下载/加载。
+
+        失败不会让知识库整体不可用：索引、文档和 BM25 仍可加载，检索会
+        自动降级到词法召回。显式重建索引时可传 ``force_retry=True`` 重试。
+        """
         if self.embedding_model is not None:
-            return
-        from sentence_transformers import SentenceTransformer
-        logger.info(f"加载嵌入模型: {EMBEDDING_MODEL_NAME}")
-        self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
-        self._embedding_dim = self.embedding_model.get_sentence_embedding_dimension()
-        logger.info(f"嵌入模型加载完成，维度: {self._embedding_dim}")
+            return True
+        if self._embedding_load_attempted and not force_retry:
+            return False
+
+        self._embedding_load_attempted = True
+        self._embedding_load_error = None
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            logger.info(f"加载嵌入模型: {EMBEDDING_MODEL_NAME}")
+            model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+            model_dim = model.get_sentence_embedding_dimension()
+            if model_dim is None:
+                raise ValueError("嵌入模型未返回有效维度")
+            self.embedding_model = model
+            self._embedding_dim = int(model_dim)
+            logger.info(f"嵌入模型加载完成，维度: {self._embedding_dim}")
+            return True
+        except Exception as exc:
+            self.embedding_model = None
+            self._embedding_load_error = f"{type(exc).__name__}: {exc}"
+            logger.warning(
+                "嵌入模型不可用，后续检索将使用 BM25 词法降级，"
+                "不会在每个请求中重复加载模型: %s",
+                self._embedding_load_error,
+            )
+            return False
+
+    def _ensure_dense_ready(self) -> bool:
+        """确认 Dense 检索可用；不可用时保留 BM25，而不是让搜索整体失败。"""
+        if self.index is None or not self.is_ready:
+            return False
+        if self._dense_disabled_reason or self._embedding_load_error:
+            return False
+        if (
+            self._index_embedding_model
+            and self._index_embedding_model != EMBEDDING_MODEL_NAME
+        ):
+            self._dense_disabled_reason = (
+                f"索引由 {self._index_embedding_model} 构建，"
+                f"当前配置为 {EMBEDDING_MODEL_NAME}"
+            )
+            logger.warning(
+                "Dense 检索已禁用，但 BM25 仍可用: %s",
+                self._dense_disabled_reason,
+            )
+            return False
+        if not self._load_embedding_model():
+            return False
+
+        model_dim = self.embedding_model.get_sentence_embedding_dimension()
+        if model_dim is None or int(model_dim) != int(self.index.d):
+            self._dense_disabled_reason = (
+                f"索引维度 {self.index.d} 与嵌入模型维度 {model_dim} 不一致"
+            )
+            logger.warning(
+                "Dense 检索已禁用，但 BM25 仍可用: %s",
+                self._dense_disabled_reason,
+            )
+            return False
+        return True
 
     # ------------------------------------------------------------------
     # 分块
@@ -382,10 +446,9 @@ class KnowledgeBase:
         logger.info(f"从戏曲数据目录收集了 {len(all_docs)} 个知识文档")
         return all_docs
 
-    def build_index(self, additional_texts: Optional[List[dict]] = None):
-        """构建知识库 FAISS + BM25 索引。"""
+    def build_index(self, additional_texts: Optional[List[dict]] = None) -> bool:
+        """构建知识库 FAISS + BM25 索引；无数据时保留旧索引并返回 False。"""
         with self._lock:
-            self._load_embedding_model()
             raw_docs = self.collect_knowledge_from_opera_data()
             if additional_texts:
                 raw_docs.extend(additional_texts)
@@ -411,7 +474,15 @@ class KnowledgeBase:
                 logger.warning(
                     "没有找到任何知识文本，保留现有内存/磁盘索引不变"
                 )
-                return
+                return False
+
+            # 只有确实存在待向量化文本时才加载嵌入模型；NAS/数据源不可用时
+            # 不应为了空建库而等待模型下载或占用显存。
+            if not self._load_embedding_model(force_retry=True):
+                raise RuntimeError(
+                    "嵌入模型不可用，无法构建向量索引: "
+                    f"{self._embedding_load_error or 'unknown error'}"
+                )
 
             logger.info(f"共 {len(new_documents)} 个文本块，开始向量化...")
             embeddings = self.embedding_model.encode(
@@ -435,9 +506,12 @@ class KnowledgeBase:
             self.documents = new_documents
             self.index = new_index
             self._embedding_dim = int(embeddings.shape[1])
+            self._index_embedding_model = EMBEDDING_MODEL_NAME
+            self._dense_disabled_reason = None
             self._build_bm25_index(new_documents)
             logger.info(f"FAISS 索引构建完成，包含 {self.index.ntotal} 个向量")
             self.save()
+            return True
 
     def save(self):
         with self._lock:
@@ -477,7 +551,7 @@ class KnowledgeBase:
             logger.info("知识库索引、文档和 manifest 已保存")
 
     def load(self) -> bool:
-        """加载并校验索引；向量数、文档数或模型维度不一致时拒绝使用。"""
+        """加载并校验索引；嵌入模型不可用时仍保留 BM25 检索能力。"""
         with self._lock:
             if not self._index_path.exists() or not self._docs_path.exists():
                 logger.warning("未找到已有索引文件")
@@ -495,21 +569,22 @@ class KnowledgeBase:
                         f"索引向量数 {index.ntotal} 与文档数 {len(documents)} 不一致"
                     )
 
-                self._load_embedding_model()
-                model_dim = self.embedding_model.get_sentence_embedding_dimension()
-                if int(index.d) != int(model_dim):
-                    raise ValueError(
-                        f"索引维度 {index.d} 与嵌入模型维度 {model_dim} 不一致"
-                    )
-
+                indexed_model = None
+                dense_disabled_reason = None
                 if self._manifest_path.exists():
                     with open(self._manifest_path, "r", encoding="utf-8") as f:
                         manifest = json.load(f)
                     indexed_model = manifest.get("embedding_model")
                     if indexed_model and indexed_model != EMBEDDING_MODEL_NAME:
-                        raise ValueError(
+                        # 模型不一致时，向量空间不可比较；但文档和 BM25 仍可
+                        # 正常使用，因此不要连带拒绝整个知识库。
+                        dense_disabled_reason = (
                             f"索引由模型 {indexed_model} 构建，与当前模型 "
                             f"{EMBEDDING_MODEL_NAME} 不一致"
+                        )
+                        logger.warning(
+                            "Dense 检索将禁用，BM25 仍可加载: %s",
+                            dense_disabled_reason,
                         )
                     if int(manifest.get("embedding_dim", index.d)) != int(index.d):
                         raise ValueError("manifest 中的嵌入维度与索引不一致")
@@ -533,24 +608,69 @@ class KnowledgeBase:
                         )
                 else:
                     logger.warning(
-                        "索引缺少 manifest，已兼容加载；建议重建索引以应用新的分块配置"
+                        "索引缺少 manifest，已兼容加载；Dense 模型将在首次检索时校验，"
+                        "BM25 可立即使用"
                     )
+
+                # 若模型此前已经加载，则加载时顺手校验维度；模型未加载时不
+                # 触发下载，把工作留给首次 Dense 检索或显式建库。
+                if self.embedding_model is not None:
+                    model_dim = self.embedding_model.get_sentence_embedding_dimension()
+                    if model_dim is None or int(model_dim) != int(index.d):
+                        dense_disabled_reason = (
+                            f"索引维度 {index.d} 与嵌入模型维度 {model_dim} 不一致"
+                        )
+                        logger.warning(
+                            "Dense 检索将禁用，BM25 仍可用: %s",
+                            dense_disabled_reason,
+                        )
 
                 self.index = index
                 self.documents = documents
-                self._embedding_dim = int(model_dim)
+                self._embedding_dim = int(index.d)
+                self._index_embedding_model = indexed_model
+                self._dense_disabled_reason = dense_disabled_reason
                 self._build_bm25_index(documents)
                 logger.info(
                     f"加载知识库: {self.index.ntotal} 个向量, "
-                    f"{len(self.documents)} 个文档"
+                    f"{len(self.documents)} 个文档（BM25 已就绪）"
                 )
                 return True
             except Exception as e:
                 logger.error(f"知识库索引加载失败，拒绝使用脏索引: {e}")
                 self.index = None
                 self.documents = []
+                self._index_embedding_model = None
+                self._dense_disabled_reason = None
                 self._build_bm25_index([])
                 return False
+
+    def ensure_ready(self, auto_build: bool = False) -> bool:
+        """线程安全地加载已有知识库。
+
+        默认不在请求路径自动建库：NAS/数据源不可用时，自动扫描和分块
+        可能长时间阻塞，甚至误以为数据为空。需要重建时请显式运行
+        ``build_knowledge_base.py``，或在确有把握的运维脚本中传
+        ``auto_build=True``。
+        """
+        with self._lock:
+            if self.is_ready:
+                return True
+            if self.load():
+                return True
+            if not auto_build:
+                logger.warning(
+                    "知识库索引不可用，已跳过自动建库；"
+                    "请先运行 build_knowledge_base.py"
+                )
+                return False
+            logger.info("知识库未找到，尝试自动构建...")
+            try:
+                self.build_index()
+            except Exception as exc:
+                logger.error("知识库自动构建失败: %s", exc)
+                return False
+            return self.is_ready
 
     # ------------------------------------------------------------------
     # 检索
@@ -572,22 +692,35 @@ class KnowledgeBase:
                 logger.warning("知识库索引为空或文档/向量未对齐，请先构建索引")
                 return []
 
-            self._load_embedding_model()
-            query_embedding = np.asarray(
-                self.embedding_model.encode(
-                    [query], normalize_embeddings=True
-                ),
-                dtype=np.float32,
-            )
-            if query_embedding.ndim == 1:
-                query_embedding = query_embedding.reshape(1, -1)
-
-            dense_k = min(max(top_k, int(RAG_DENSE_CANDIDATE_K)), self.index.ntotal)
-            scores, indices = self.index.search(query_embedding, dense_k)
             dense_scores: Dict[int, float] = {}
-            for score, index in zip(scores[0], indices[0]):
-                if index >= 0:
-                    dense_scores[int(index)] = float(score)
+            if self._ensure_dense_ready():
+                try:
+                    query_embedding = np.asarray(
+                        self.embedding_model.encode(
+                            [query], normalize_embeddings=True
+                        ),
+                        dtype=np.float32,
+                    )
+                    if query_embedding.ndim == 1:
+                        query_embedding = query_embedding.reshape(1, -1)
+
+                    dense_k = min(
+                        max(top_k, int(RAG_DENSE_CANDIDATE_K)),
+                        self.index.ntotal,
+                    )
+                    scores, indices = self.index.search(query_embedding, dense_k)
+                    for score, index in zip(scores[0], indices[0]):
+                        if index >= 0:
+                            dense_scores[int(index)] = float(score)
+                except Exception as exc:
+                    # 编码/FAISS 查询失败也只降级本次 Dense 路径，不阻断 BM25。
+                    self._dense_disabled_reason = (
+                        f"Dense 检索失败: {type(exc).__name__}: {exc}"
+                    )
+                    logger.warning(
+                        "Dense 检索失败，后续使用 BM25 词法降级: %s", exc
+                    )
+                    dense_scores = {}
 
             bm25_scores = self._bm25_scores(query)
             bm25_ranked = sorted(
@@ -608,9 +741,15 @@ class KnowledgeBase:
             if not candidate_indices:
                 return []
 
+            threshold = float(threshold)
             bm25_max = max(
                 (bm25_scores.get(index, 0.0) for index in candidate_indices),
                 default=0.0,
+            )
+            # 只有至少一个 Dense 候选通过阈值，才算 Dense 通道真正参与。
+            # 否则即使 FAISS 返回了低分邻居，也应走纯 BM25 分数。
+            dense_active = any(
+                score >= threshold for score in dense_scores.values()
             )
             ranked: List[dict] = []
             for index in candidate_indices:
@@ -618,16 +757,31 @@ class KnowledgeBase:
                 bm25_score = float(bm25_scores.get(index, 0.0))
                 dense_normalized = max(0.0, min(1.0, dense_score))
                 bm25_normalized = bm25_score / bm25_max if bm25_max > 0 else 0.0
-                final_score = (
-                    RAG_HYBRID_DENSE_WEIGHT * dense_normalized
-                    + RAG_HYBRID_BM25_WEIGHT * bm25_normalized
-                )
-                if dense_score >= float(threshold) and bm25_score > 0:
-                    matched_by = "hybrid"
-                elif bm25_score > 0:
-                    matched_by = "bm25"
+                if dense_active:
+                    final_score = (
+                        RAG_HYBRID_DENSE_WEIGHT * dense_normalized
+                        + RAG_HYBRID_BM25_WEIGHT * bm25_normalized
+                    )
                 else:
+                    # 纯 BM25 降级时直接使用归一化词法分数，避免被融合权重
+                    # 压到 0.35 以下，导致前端看起来“相关度很低”。
+                    final_score = bm25_normalized
+
+                dense_matched = (
+                    index in dense_scores and dense_score >= threshold
+                )
+                bm25_matched = bm25_score > 0
+                if dense_matched and bm25_matched:
+                    matched_by = "hybrid"
+                elif bm25_matched:
+                    matched_by = "bm25"
+                elif dense_matched:
                     matched_by = "dense"
+                else:
+                    matched_by = "unknown"
+                # 单个结果的检索模式要按该结果两路分数判断，不能因为
+                # “本轮 Dense 通道有候选”就把仅 BM25 命中也标成 dense。
+                retrieval_mode = matched_by
 
                 doc = self.documents[index]
                 ranked.append({
@@ -640,6 +794,8 @@ class KnowledgeBase:
                     "genre": doc.get("genre", ""),
                     "title": doc.get("title", ""),
                     "chunk_index": doc.get("chunk_index"),
+                    "dense_available": dense_active,
+                    "retrieval_mode": retrieval_mode,
                 })
 
             ranked.sort(
@@ -659,6 +815,48 @@ class KnowledgeBase:
             and self.index.ntotal > 0
             and len(self.documents) == self.index.ntotal
         )
+
+    @property
+    def dense_ready(self) -> bool:
+        if (
+            self.embedding_model is None
+            or self.index is None
+            or self._embedding_load_error
+            or self._dense_disabled_reason
+        ):
+            return False
+        model_dim = self.embedding_model.get_sentence_embedding_dimension()
+        return model_dim is not None and int(model_dim) == int(self.index.d)
+
+    @property
+    def embedding_status(self) -> str:
+        if self.dense_ready:
+            return "ready"
+        if self._dense_disabled_reason:
+            return "incompatible"
+        if self._embedding_load_error:
+            return "unavailable"
+        if self._embedding_load_attempted:
+            return "unavailable"
+        return "not_attempted"
+
+    @property
+    def embedding_error(self) -> Optional[str]:
+        return self._embedding_load_error
+
+    @property
+    def retrieval_mode(self) -> str:
+        if not self.is_ready:
+            return "unavailable"
+        if self.dense_ready:
+            return "hybrid"
+        if (
+            self._embedding_load_attempted
+            or self._embedding_load_error
+            or self._dense_disabled_reason
+        ):
+            return "bm25"
+        return "hybrid_pending"
 
 
 knowledge_base = KnowledgeBase()

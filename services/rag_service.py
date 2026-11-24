@@ -26,17 +26,22 @@ _QUERY_NOISE_PHRASES = (
     "有哪些", "为什么", "怎么样", "怎么", "如何", "介绍一下", "介绍",
 )
 _WHITESPACE_RE = re.compile(r"\s+")
+_CITATION_BLOCK_RE = re.compile(
+    r"\[(S\d+(?:\s*[,，、]\s*S\d+)*)\]",
+    re.IGNORECASE,
+)
+_CITATION_TOKEN_RE = re.compile(r"S(\d+)", re.IGNORECASE)
 
 
 class RAGService:
     """RAG 增强问答服务"""
 
     def ensure_knowledge_base(self):
-        if not knowledge_base.is_ready:
-            loaded = knowledge_base.load()
-            if not loaded:
-                logger.info("知识库未找到，开始构建...")
-                knowledge_base.build_index()
+        if not knowledge_base.ensure_ready(auto_build=False):
+            logger.warning(
+                "知识库索引不可用；请先运行 build_knowledge_base.py。"
+                "问答将返回未命中提示或通用回答。"
+            )
 
     @staticmethod
     def _normalize_text(text: str) -> str:
@@ -106,6 +111,149 @@ class RAGService:
         merged = self._merge_results(all_results)
         # 多留一些候选给上下文阶段做近似去重和预算裁剪。
         return merged[:max(int(top_k) * 2, int(top_k) + 3)]
+
+    @staticmethod
+    def _reference_citation_numbers(references: List[dict]) -> set:
+        """从 references 中提取允许出现的引用编号（只取数字部分）。"""
+        allowed = set()
+        for reference in references:
+            match = _CITATION_TOKEN_RE.search(
+                str(reference.get("citation_id", ""))
+            )
+            if match:
+                allowed.add(int(match.group(1)))
+        return allowed
+
+    def _validate_answer_citations(
+        self, answer: str, references: List[dict]
+    ) -> Tuple[str, dict]:
+        """校验答案中的 [S#] 编号，只保留 references 中真实存在的编号。
+
+        提示词要求模型标注来源，但模型仍可能编造不存在的编号。这里做
+        后端硬校验：无效编号直接从答案中删除，并返回结构化校验结果，
+        避免仅靠提示词约束。
+        """
+        allowed_numbers = self._reference_citation_numbers(references)
+        valid_cited: List[int] = []
+        invalid_cited: List[int] = []
+
+        def replace_block(match: re.Match) -> str:
+            numbers = [
+                int(token.group(1))
+                for token in _CITATION_TOKEN_RE.finditer(match.group(1))
+            ]
+            kept: List[int] = []
+            for number in numbers:
+                if number in allowed_numbers:
+                    if number not in valid_cited:
+                        valid_cited.append(number)
+                    if number not in kept:
+                        kept.append(number)
+                elif number not in invalid_cited:
+                    invalid_cited.append(number)
+            if not kept:
+                return ""
+            return "[" + "、".join(f"S{number}" for number in kept) + "]"
+
+        cleaned = _CITATION_BLOCK_RE.sub(replace_block, answer or "")
+        # 删除引用后清理多余空格，不改动正文其他内容。
+        cleaned = re.sub(r"[ \t]+([，。；：！？,.!?;:])", r"\1", cleaned)
+        cleaned = re.sub(r"[ \t]{2,}", " ", cleaned).strip()
+
+        validation = {
+            "valid_citation_ids": [
+                f"S{number}" for number in sorted(allowed_numbers)
+            ],
+            "cited_citation_ids": [
+                f"S{number}" for number in sorted(valid_cited)
+            ],
+            "invalid_citation_ids": [
+                f"S{number}" for number in sorted(invalid_cited)
+            ],
+            "has_valid_citation": bool(valid_cited),
+            "has_invalid_citation": bool(invalid_cited),
+            "has_any_citation": bool(valid_cited or invalid_cited),
+        }
+        return cleaned, validation
+
+    @staticmethod
+    def _citation_warning(validation: dict, has_references: bool) -> Optional[str]:
+        warnings: List[str] = []
+        invalid_ids = validation.get("invalid_citation_ids", [])
+        if invalid_ids:
+            warnings.append(
+                "已移除 {} 个不存在的引用编号（{}）".format(
+                    len(invalid_ids), "、".join(invalid_ids)
+                )
+            )
+        if has_references and not validation.get("has_valid_citation"):
+            warnings.append("答案未包含有效资料引用，请核验关键事实")
+        if not has_references and validation.get("has_any_citation"):
+            warnings.append(
+                "知识库未命中，答案中的引用编号已移除；"
+                "内容仅代表模型通用知识"
+            )
+        return "；".join(warnings) if warnings else None
+
+    @staticmethod
+    def _summarize_retrieval(results: List[dict],
+                             references: List[dict]) -> dict:
+        """根据实际送进上下文的结果计算真实检索模式。
+
+        优先信任每条结果的 ``retrieval_mode``。``dense_available`` 只表示
+        本轮 Dense 通道是否产生了候选，不能据此把纯 BM25 结果误判为
+        混合检索；只有缺少逐条模式时才回退到分数。
+        """
+        selected = references if references else results
+        dense_used = False
+        bm25_used = False
+
+        for item in selected:
+            mode = str(item.get("retrieval_mode") or "").lower()
+            if mode not in {"hybrid", "dense", "bm25"}:
+                mode = str(item.get("matched_by") or "").lower()
+            if mode not in {"hybrid", "dense", "bm25"}:
+                try:
+                    dense_score = float(item.get("dense_score") or 0.0)
+                    bm25_score = float(item.get("bm25_score") or 0.0)
+                except (TypeError, ValueError):
+                    dense_score = 0.0
+                    bm25_score = 0.0
+                if dense_score > 0 and bm25_score > 0:
+                    mode = "hybrid"
+                elif dense_score > 0:
+                    mode = "dense"
+                elif bm25_score > 0:
+                    mode = "bm25"
+                else:
+                    mode = "unknown"
+
+            if mode == "hybrid":
+                dense_used = True
+                bm25_used = True
+            elif mode == "dense":
+                dense_used = True
+            elif mode == "bm25":
+                bm25_used = True
+
+        if dense_used and bm25_used:
+            mode = "hybrid"
+        elif dense_used:
+            mode = "dense"
+        elif bm25_used:
+            mode = "bm25"
+        elif selected:
+            mode = "unknown"
+        else:
+            mode = "none"
+
+        return {
+            "mode": mode,
+            "retrieval_mode": mode,
+            "hybrid": mode == "hybrid",
+            "dense_available": dense_used,
+            "bm25_available": bm25_used,
+        }
 
     @staticmethod
     def _truncate_at_boundary(text: str, limit: int) -> str:
@@ -218,6 +366,9 @@ class RAGService:
             question, top_k=top_k, threshold=threshold
         )
         references = prepared["references"]
+        retrieval = self._summarize_retrieval(
+            prepared["results"], references
+        )
 
         if qwen_model.is_loaded:
             logger.info(
@@ -243,17 +394,39 @@ class RAGService:
                 else "知识库未命中且千问模型未启动"
             )
 
+        # 不把“有没有引用编号”完全交给提示词和模型自觉：后端做硬校验。
+        answer, citation_validation = self._validate_answer_citations(
+            answer, references
+        )
+        citation_warning = self._citation_warning(
+            citation_validation, bool(references)
+        )
+        if citation_warning:
+            note = f"{note}；{citation_warning}"
+
+        embedding_status = knowledge_base.embedding_status
+        embedding_error = knowledge_base.embedding_error
+        if (
+            references
+            and retrieval["mode"] == "bm25"
+            and embedding_status in {"unavailable", "incompatible"}
+        ):
+            note = f"{note}；Dense 嵌入模型不可用（本次使用 BM25 词法检索）"
+
         return {
             "answer": answer,
             "source": source,
             "references": references,
             "note": note,
+            "citation_validation": citation_validation,
             "retrieval": {
                 "top_k": int(top_k),
                 "threshold": float(threshold),
                 "candidates": len(prepared["results"]),
                 "used": len(references),
-                "hybrid": True,
+                **retrieval,
+                "embedding_status": embedding_status,
+                "embedding_error": embedding_error,
             },
         }
 

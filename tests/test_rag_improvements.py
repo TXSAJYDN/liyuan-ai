@@ -1,4 +1,5 @@
 """RAG 混合检索、分块、引用和参数贯通回归测试。"""
+import builtins
 import json
 import tempfile
 import unittest
@@ -98,8 +99,11 @@ class HybridSearchTests(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["title"], "Qiba")
         self.assertEqual(results[0]["matched_by"], "bm25")
+        self.assertEqual(results[0]["retrieval_mode"], "bm25")
         self.assertEqual(results[0]["dense_score"], 0.0)
         self.assertGreater(results[0]["bm25_score"], 0.0)
+        # 纯 BM25 降级不再乘 0.35 融合权重，唯一候选的归一化分数应为 1。
+        self.assertAlmostEqual(results[0]["score"], 1.0)
 
     def test_dense_threshold_rejects_unrelated_results(self):
         documents = [{
@@ -195,6 +199,14 @@ class IndexValidationTests(unittest.TestCase):
             self.assertTrue(kb.is_ready)
             self.assertEqual(len(kb.documents), 1)
 
+            # 模拟离线环境：嵌入模型不可用时，旧索引仍应能提供 BM25。
+            kb._embedding_load_attempted = True
+            kb._embedding_load_error = "ImportError: offline"
+            results = kb.search("legacy", top_k=1)
+            self.assertTrue(results)
+            self.assertEqual(results[0]["retrieval_mode"], "bm25")
+            self.assertEqual(kb.retrieval_mode, "bm25")
+
 
 class BuildSafetyTests(unittest.TestCase):
     def test_empty_build_does_not_overwrite_existing_index(self):
@@ -217,8 +229,119 @@ class BuildSafetyTests(unittest.TestCase):
         self.assertEqual(kb.index.ntotal, 1)
         save_mock.assert_not_called()
 
+    def test_empty_build_skips_embedding_model_load(self):
+        """没有文本时不应为了空建库去加载/下载嵌入模型。"""
+        kb = KnowledgeBase()
+        with patch.object(
+            kb, "collect_knowledge_from_opera_data", return_value=[]
+        ), patch.object(
+            kb, "_load_embedding_model"
+        ) as load_mock, patch.object(kb, "save") as save_mock:
+            built = kb.build_index()
+
+        self.assertFalse(built)
+        load_mock.assert_not_called()
+        save_mock.assert_not_called()
+
+    def test_ensure_ready_does_not_auto_build_by_default(self):
+        """请求路径只加载已有索引，不应在 NAS 不可用时主动扫描/建库。"""
+        kb = KnowledgeBase()
+        with patch.object(kb, "load", return_value=False), patch.object(
+            kb, "build_index"
+        ) as build_mock:
+            self.assertFalse(kb.ensure_ready())
+
+        build_mock.assert_not_called()
+
+
+class OfflineDegradationTests(unittest.TestCase):
+    @staticmethod
+    def _make_bm25_kb(documents):
+        kb = KnowledgeBase()
+        kb.documents = documents
+        kb.index = faiss.IndexFlatIP(4)
+        kb.index.add(np.asarray(
+            [[0.0, 1.0, 0.0, 0.0]] * len(documents),
+            dtype=np.float32,
+        ))
+        kb._build_bm25_index(documents)
+        return kb
+
+    def test_search_falls_back_to_bm25_when_embedding_unavailable(self):
+        kb = self._make_bm25_kb([{
+            "text": "Qiba is a stylized martial posture in Chinese opera.",
+            "title": "Qiba",
+            "genre": "京剧",
+        }])
+        kb._embedding_load_attempted = True
+        kb._embedding_load_error = "ImportError: offline"
+
+        results = kb.search("什么是起霸？", top_k=3, threshold=0.4)
+
+        self.assertTrue(results)
+        self.assertEqual(results[0]["retrieval_mode"], "bm25")
+        self.assertFalse(results[0]["dense_available"])
+        self.assertEqual(kb.retrieval_mode, "bm25")
+        self.assertEqual(kb.embedding_status, "unavailable")
+        self.assertAlmostEqual(results[0]["score"], 1.0)
+
+    def test_embedding_load_failure_is_not_retried_per_request(self):
+        kb = KnowledgeBase()
+        import_calls = []
+        original_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "sentence_transformers":
+                import_calls.append(name)
+                raise ImportError("offline model cache missing")
+            return original_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=fake_import):
+            self.assertFalse(kb._load_embedding_model())
+            self.assertFalse(kb._load_embedding_model())
+
+        self.assertEqual(len(import_calls), 1)
+        self.assertIn("ImportError", kb.embedding_error)
+        self.assertEqual(kb.embedding_status, "unavailable")
+
 
 class RAGServiceTests(unittest.TestCase):
+    @staticmethod
+    def _bm25_search_result():
+        return {
+            "text": "Qiba is a stylized martial posture in Chinese opera.",
+            "score": 1.0,
+            "dense_score": 0.0,
+            "bm25_score": 2.0,
+            "matched_by": "bm25",
+            "dense_available": False,
+            "retrieval_mode": "bm25",
+            "title": "Qiba",
+            "genre": "京剧",
+            "source": "qiba.txt",
+        }
+
+    def _answer_with_model(self, search_result, model_answer):
+        global_kb = rag_module.knowledge_base
+        with patch.object(
+            type(global_kb), "is_ready", new_callable=PropertyMock,
+            return_value=True,
+        ), patch.object(
+            global_kb, "search", return_value=[search_result],
+        ), patch.object(
+            type(global_kb), "embedding_status",
+            new_callable=PropertyMock, return_value="unavailable",
+        ), patch.object(
+            type(global_kb), "embedding_error",
+            new_callable=PropertyMock, return_value="ImportError: offline",
+        ), patch.object(
+            type(rag_module.qwen_model), "is_loaded",
+            new_callable=PropertyMock, return_value=True,
+        ), patch.object(
+            rag_module.qwen_model, "chat", return_value=model_answer,
+        ):
+            return RAGService().answer_question("什么是起霸？", top_k=1)
+
     def test_query_variants_remove_interrogative_noise(self):
         service = RAGService()
         variants = service._query_variants("请问什么是起霸？")
@@ -252,6 +375,52 @@ class RAGServiceTests(unittest.TestCase):
         self.assertIn("[S1]", result["answer"])
         self.assertEqual(result["retrieval"]["used"], 1)
         self.assertTrue(result["retrieval"]["hybrid"])
+        self.assertEqual(result["retrieval"]["mode"], "hybrid")
+        self.assertTrue(result["citation_validation"]["has_valid_citation"])
+
+    def test_answer_removes_fabricated_citation_ids(self):
+        result = self._answer_with_model(
+            self._bm25_search_result(),
+            "起霸是戏曲中的程式动作 [S1]，另见 [S99]。",
+        )
+
+        self.assertIn("[S1]", result["answer"])
+        self.assertNotIn("[S99]", result["answer"])
+        self.assertEqual(
+            result["citation_validation"]["cited_citation_ids"], ["S1"]
+        )
+        self.assertEqual(
+            result["citation_validation"]["invalid_citation_ids"], ["S99"]
+        )
+        self.assertIn("已移除", result["note"])
+        # Dense 不可用时，检索元数据必须如实报告 BM25，而不是写死 hybrid。
+        self.assertEqual(result["retrieval"]["mode"], "bm25")
+        self.assertFalse(result["retrieval"]["hybrid"])
+        self.assertEqual(result["retrieval"]["embedding_status"], "unavailable")
+        self.assertIn("BM25", result["note"])
+
+    def test_answer_without_valid_citation_is_flagged(self):
+        result = self._answer_with_model(
+            self._bm25_search_result(),
+            "起霸是一种程式动作。",
+        )
+
+        self.assertFalse(result["citation_validation"]["has_valid_citation"])
+        self.assertFalse(result["citation_validation"]["has_any_citation"])
+        self.assertIn("未包含有效资料引用", result["note"])
+
+    def test_retrieval_summary_does_not_treat_bm25_only_as_hybrid(self):
+        """Dense 通道有候选不代表最终结果用了 Dense。"""
+        result = self._bm25_search_result()
+        # 模拟 Dense 通道产生了低分候选，但最终命中的仍是 BM25 结果。
+        result["dense_available"] = True
+
+        summary = RAGService._summarize_retrieval([result], [result])
+
+        self.assertEqual(summary["mode"], "bm25")
+        self.assertFalse(summary["hybrid"])
+        self.assertFalse(summary["dense_available"])
+        self.assertTrue(summary["bm25_available"])
 
     def test_context_budget_truncates_long_references(self):
         service = RAGService()
@@ -324,6 +493,53 @@ class ParameterPropagationTests(unittest.TestCase):
         search_mock.assert_called_once_with(
             "云手", top_k=7, video_name="video_a"
         )
+
+    def test_pipeline_does_not_eager_load_qwen(self):
+        """Web 服务应先可启动，30B 模型在真正问答/分析时再按需加载。"""
+        with patch.object(
+            self.pipeline_module.Pipeline, "load_qwen_model"
+        ) as load_mock:
+            self.pipeline_module.Pipeline()
+
+        load_mock.assert_not_called()
+
+    def test_pipeline_knowledge_base_is_load_only(self):
+        pipeline = object.__new__(self.pipeline_module.Pipeline)
+        pipeline._kb_initialized = False
+        with patch.object(
+            self.pipeline_module.knowledge_base, "ensure_ready",
+            return_value=True,
+        ) as ensure_mock:
+            pipeline.init_knowledge_base()
+
+        ensure_mock.assert_called_once_with(auto_build=False)
+
+    def test_pipeline_ask_question_enters_qwen_degraded_path(self):
+        pipeline = object.__new__(self.pipeline_module.Pipeline)
+        pipeline.init_knowledge_base = lambda: None
+        with patch.object(
+            pipeline, "ensure_qwen", return_value=False
+        ) as ensure_mock, patch.object(
+            self.pipeline_module.rag_service, "answer_question",
+            return_value={"answer": "fallback"},
+        ) as answer_mock:
+            result = pipeline.ask_question("问题", top_k=2, threshold=0.3)
+
+        ensure_mock.assert_called_once_with()
+        answer_mock.assert_called_once_with("问题", top_k=2, threshold=0.3)
+        self.assertEqual(result["answer"], "fallback")
+
+    def test_pipeline_status_exposes_retrieval_fields(self):
+        pipeline = object.__new__(self.pipeline_module.Pipeline)
+        status = pipeline.get_status()
+
+        for key in (
+            "knowledge_base_retrieval_mode",
+            "knowledge_base_dense_ready",
+            "embedding_status",
+            "embedding_error",
+        ):
+            self.assertIn(key, status)
 
 
 if __name__ == "__main__":

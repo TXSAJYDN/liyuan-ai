@@ -26,20 +26,34 @@ class Pipeline:
 
     def __init__(self):
         self._kb_initialized = False
-        self.load_qwen_model()
+        # 不在构造时加载 30B 模型：先让 Web 服务可启动，问答/分析时再按需加载。
+        # 模型不可用时由 ensure_qwen() 记录警告并走降级路径。
 
     def init_knowledge_base(self):
         if self._kb_initialized and knowledge_base.is_ready:
             return
-        loaded = knowledge_base.load()
-        if not loaded:
-            logger.info("知识库不存在，开始构建...")
-            knowledge_base.build_index()
+        if not knowledge_base.ensure_ready(auto_build=False):
+            logger.warning(
+                "知识库索引不可用；问答将返回未命中提示或通用回答。"
+                "如需重建请显式运行 build_knowledge_base.py。"
+            )
         self._kb_initialized = True
 
     def load_qwen_model(self):
+        """显式加载千问模型；加载失败会抛出异常，供初始化接口返回错误。"""
         if not qwen_model.is_loaded:
             qwen_model.load_model()
+        return qwen_model.is_loaded
+
+    def ensure_qwen(self) -> bool:
+        """按需加载千问模型；失败时只记录警告，让调用方走降级路径。"""
+        if qwen_model.is_loaded:
+            return True
+        try:
+            return bool(self.load_qwen_model())
+        except Exception as exc:
+            logger.warning("千问模型加载失败，使用降级路径: %s", exc)
+            return False
 
     def _ensure_clip_index(self, video_name: str, keyframes: List[dict],
                            load_existing: bool = True) -> bool:
@@ -111,6 +125,7 @@ class Pipeline:
                 "analysis": cached["analysis"],
                 "knowledge_refs": cached["knowledge_refs"],
             }
+        self.ensure_qwen()
         analysis_result = rag_service.analyze_video_with_rag(
             sample_frames,
             visual_keywords=["戏曲表演", "行当", "动作程式", "服饰"]
@@ -149,6 +164,7 @@ class Pipeline:
     def ask_question(self, question: str, top_k: int = RAG_TOP_K,
                      threshold: float = RAG_RELEVANCE_THRESHOLD) -> dict:
         self.init_knowledge_base()
+        self.ensure_qwen()
         return rag_service.answer_question(
             question, top_k=top_k, threshold=threshold
         )
@@ -163,6 +179,10 @@ class Pipeline:
         indexed_videos = clip_retriever.list_indexed_videos()
         return {
             "knowledge_base_ready": knowledge_base.is_ready,
+            "knowledge_base_retrieval_mode": knowledge_base.retrieval_mode,
+            "knowledge_base_dense_ready": knowledge_base.dense_ready,
+            "embedding_status": knowledge_base.embedding_status,
+            "embedding_error": knowledge_base.embedding_error,
             "clip_index_ready": clip_retriever.is_ready,
             "clip_index_available": bool(indexed_videos),
             "clip_index_video": clip_retriever.current_video_name,

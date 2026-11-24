@@ -28,7 +28,16 @@ def main():
         print(f"  - {genre}: {count} 个文档")
 
     print("\n开始构建向量索引...")
-    knowledge_base.build_index()
+    try:
+        built = knowledge_base.build_index()
+    except Exception as exc:
+        print(f"\n知识库构建失败，现有索引保持不变: {exc}")
+        return 1
+
+    if not built:
+        print("\n未构建索引：没有找到可用的知识文本，或嵌入模型不可用。")
+        print("现有索引未被覆盖；请检查数据源或模型缓存后重试。")
+        return 1
 
     print(f"\n知识库构建完成！")
     print(f"   文档块数: {len(knowledge_base.documents)}")
@@ -42,7 +51,8 @@ def main():
         print(f"\n查询: '{q}'")
         for r in results:
             print(f"  [{r['score']:.4f}] [{r.get('title', '')}] {r['text'][:80]}...")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
